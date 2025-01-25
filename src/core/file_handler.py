@@ -40,5 +40,3 @@ class FileHandler:
 
         self.state.filenames = specimen_files
         return specimen_files
-
-    def

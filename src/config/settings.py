@@ -25,3 +25,10 @@ class NamingInTheNameOf:
 
     def __post_init__(self):
         self.filenames = [] if self.filenames is None else self.filenames
+
+@dataclass
+class SortOf:
+    # sort and select the successfully pulled out fibers
+    measurements = []  # list of measurements
+    good_ones = []  # list of successfully pulled out fibers
+    bad_ones = []  # list of broken fibers
