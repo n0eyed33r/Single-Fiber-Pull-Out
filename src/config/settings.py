@@ -26,9 +26,21 @@ class NamingInTheNameOf:
     def __post_init__(self):
         self.filenames = [] if self.filenames is None else self.filenames
 
+# saving strings from path
+    def update_paths(self, new_path: Path):
+        self.root_path = new_path
+        self.main_folder = new_path.name
+        self.filenames = []  # filled later with the names of measurements
+# global instancing
+naming_storage = NamingInTheNameOf()
+
+
 @dataclass
 class SortOf:
     # sort and select the successfully pulled out fibers
-    measurements = []  # list of measurements
-    good_ones = []  # list of successfully pulled out fibers
-    bad_ones = []  # list of broken fibers
+    measurements: list[str] = None  # list of measurements
+    good_ones: list[str] = None  # list of successfully pulled out fibers
+    good_ones_nr: int = None  # count of successfully pulled out fibers
+    bad_ones_nr: int = None  # count of broken fibers
+# global instancing
+sort_storage = SortOf()
