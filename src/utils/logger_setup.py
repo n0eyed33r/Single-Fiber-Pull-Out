@@ -12,7 +12,7 @@ class LoggerSetup:
         try:
             # Logger Grundkonfiguration
             logger = logging.getLogger('SFPO_Analyzer')
-            logger.setLevel(logging.INFO)
+            logger.setLevel(logging.DEBUG)
 
             # Wichtig: Stelle sicher, dass der Logger Nachrichten weiterleitet
             logger.propagate = True
@@ -22,7 +22,7 @@ class LoggerSetup:
 
             # Konsolenausgabe einrichten
             console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setLevel(logging.INFO)
+            console_handler.setLevel(logging.DEBUG)
             formatter = logging.Formatter('%(message)s')
             console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
@@ -50,7 +50,7 @@ class LoggerSetup:
 
                 # Wenn alles funktioniert, füge den File Handler hinzu
                 file_handler = logging.FileHandler(log_file, encoding='utf-8')
-                file_handler.setLevel(logging.INFO)
+                file_handler.setLevel(logging.DEBUG)
                 file_handler.setFormatter(formatter)
                 logger.addHandler(file_handler)
 

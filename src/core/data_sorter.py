@@ -3,6 +3,7 @@ this code was made with the help of chatgpt, claude, stackoverflow .... u name a
 """
 
 # src/core/data_sorter.py
+import os
 from src.config.settings import naming_storage, sort_storage
 
 class DataSorter:
@@ -58,6 +59,7 @@ class DataSorter:
             if name[2] == 'x' and name[3] == 'a'
         ]
         return successful, failed
+
 
     @staticmethod
     def _sort_old_scheme(filenames: list[str]) -> tuple[list[str], list[str]]:
