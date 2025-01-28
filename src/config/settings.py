@@ -8,7 +8,9 @@ from pathlib import Path
 
 @dataclass
 class MaterialParameters:
-    # material parameters of the single fiber pull-out
+    """
+    material parameters of the single fiber pull-out
+    """
     elastic_modulus_fiber: float = 250.0  # GPa
     elastic_modulus_matrix: float = 43.0  # GPa
     shear_modulus_fiber: float = 17.0  # GPa
@@ -18,7 +20,9 @@ class MaterialParameters:
 
 @dataclass
 class NamingInTheNameOf:
-    # names for further use e.g. title of measurements etc.
+    """
+    Strings and list of strings for files and path names
+    """
     filenames: list[str] = None
     root_path: Path = None
     main_folder: str = ""
@@ -37,10 +41,26 @@ naming_storage = NamingInTheNameOf()
 
 @dataclass
 class SortOf:
-    # sort and select the successfully pulled out fibers
+    """
+    Sort and select the successfully pulled out fibers.
+    """
     measurements: list[str] = None  # list of measurements
     good_ones: list[str] = None  # list of successfully pulled out fibers
     good_ones_nr: int = None  # count of successfully pulled out fibers
     bad_ones_nr: int = None  # count of broken fibers
 # global instancing
 sort_storage = SortOf()
+
+
+@dataclass
+class Calculated:
+    """
+    All calculated numbers are saved here
+    """
+    measurements: list[tuple] = None  # measurements of successfully pulled out fibers
+    fiberpulloutratio: float = None  # ratio of successfully sfpo and broken fibers
+    embeddinglength: list[float] = None  # the
+    interfaceshearstrength: list[float] = None  #
+    work: list[float] = None  #
+# global instancing
+calculated_storage = Calculated()

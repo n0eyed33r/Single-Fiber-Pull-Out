@@ -10,7 +10,9 @@ from src.config.settings import naming_storage
 
 
 class FileHandler:
-    """Use the path naming for further use"""
+    """
+    Use the path naming for further naming and string manipulations
+    """
 
     @staticmethod
     def select_folder() -> Optional[Path]:
