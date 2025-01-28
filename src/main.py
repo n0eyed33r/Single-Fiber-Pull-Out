@@ -30,11 +30,12 @@ def main():
     DataSorter.analyze_filenames()
     debug_printer.print_sorting_results()
 
-    # analyze first measurements
+    # analyze measurements
     analyzer = MeasurementAnalyzer()
+
+    # proof of finding the path
     paths = analyzer.get_measurement_paths()
-    first_measurement = analyzer.read_single_measurement(paths[0])
-    print(f"Anzahl der Datenpunkte in erster Messung: {len(first_measurement)}")
+    print(f"Gefundene Messpfade:{len(paths)}")
 
     # get all measurements
     analyzer.read_all_measurements()
