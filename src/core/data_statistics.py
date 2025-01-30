@@ -102,7 +102,7 @@ class MeasurementAnalyzer:
 
     def find_all_embeddinglengths(self):
         for measurement in self.measurements_data:
-            max_distance = self.find_single_embeddinglength()
+            max_distance = self.find_single_embeddinglength(measurement)
             self.embeddinglengths.append(max_distance)
 
 '''
@@ -113,34 +113,6 @@ class MeasurementAnalyzer:
     def standardize_data(self, data):
         # Standardisierung der Daten
         pass
-
-
-
-    def maximalforce():
-        # maximal force for each SFPO
-        Config.maxforces = [
-            (max_value := max(messung, key=lambda tupel: tupel[1]))[1]
-            for messung in Config.measurements]
-        # Get the index of the max value in each measurement
-        Config.maxforce_indices = [
-            next(i for i, tupel in enumerate(messung) if
-                 tupel[1] == max_value)
-            for messung, max_value in
-            zip(Config.measurements, Config.maxforces)]
-
-    def embeddinglength():
-        for messung in range(len(SFPO_config.acceptresults)):
-            # i.th document import
-            df = pd.read_csv(
-                str(SFPO_config.rootname[0]) + "\\" +
-                str(SFPO_config.acceptresults[messung] + '.txt'),
-                delimiter='\t',
-                header=None,
-                encoding='unicode_escape',
-                skiprows=26,
-                nrows=1)
-            value = df.iloc[0, 1]  # value in line 0, column 1
-            SFPO_config.embeddinglength.append(value)
 
     def interfaceshearstrength():  # apparent IFSS - the easy one
         # calculated in N/µm² = 1*10^(12) Pa = 1*10^(6) MPa =

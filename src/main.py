@@ -51,8 +51,10 @@ def main():
           f"{round(mean_force, 3)}"+" +- "+
           f"{round(std_mean_force, 3)} N")
 
-    # get max distance of all successfully measruements
-    embeddinglengths = analyzer.
+    # get max distance of all successfully measurements
+    analyzer.find_all_embeddinglengths()
+    print(f"\n")
+    print(f"Einbettlängen sind: {analyzer.embeddinglengths}")
 
 
 
@@ -64,8 +66,6 @@ def main():
         plotter.plot_measurements()
     else:
         print("Fehler beim Plotten")'''
-
-
 
 
 if __name__ == "__main__":
