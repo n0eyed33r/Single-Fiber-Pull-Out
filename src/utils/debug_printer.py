@@ -29,6 +29,6 @@ class DebugPrinter:
 
         # Detaillierte Listen auf Debug-Level
         self.logger.debug("Erfolgreiche Messungen Details:")
-        self.logger.debug(f"Dateien: {sort_storage.good_ones}")
+        self.logger.debug(f"Dateien Erfolg: {sort_storage.good_ones}")
         self.logger.debug("Fehlgeschlagene Messungen Details:")
-        self.logger.debug(f"Dateien: {sort_storage.bad_ones}")
+        self.logger.debug(f"Dateien Abbruch: {sort_storage.bad_ones}")

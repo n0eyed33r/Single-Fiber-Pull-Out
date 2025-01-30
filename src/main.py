@@ -30,25 +30,42 @@ def main():
     DataSorter.analyze_filenames()
     debug_printer.print_sorting_results()
 
-    # analyze measurements
+    # analyze measurements instancing
     analyzer = MeasurementAnalyzer()
 
     # proof of finding the path
     paths = analyzer.get_measurement_paths()
     print(f"Gefundene Messpfade:{len(paths)}")
 
-    # get all measurements
+    # Messungen einlesen
     analyzer.read_all_measurements()
     print(f"Eingelesene Messunge: {len(analyzer.measurements_data)}")
 
-    # plotting
+    # get max forces of all successfully measurements
+    max_forces = analyzer.find_all_max_forces()
+    print(f"Liste der maximalen Kräfte aller erfolgreichen Messungen"
+          f"{max_forces}")
+    mean_force = analyzer.mittelwert()
+    std_mean_force = analyzer.standardabweichung_maxmeanforce()
+    print(f"Mittelwert der Maximalen Auszugskräfte ist: "
+          f"{round(mean_force, 3)}"+" +- "+
+          f"{round(std_mean_force, 3)} N")
+
+    # get max distance of all successfully measruements
+    embeddinglengths = analyzer.
+
+
+
+    logger.info("Analysis completed")
+
+'''    # plotting
     if analyzer.measurements_data:
         plotter = DataPlotter(analyzer)
         plotter.plot_measurements()
     else:
-        print("Fehler beim Plotten")
+        print("Fehler beim Plotten")'''
 
-    logger.info("Analysis completed")
+
 
 
 if __name__ == "__main__":

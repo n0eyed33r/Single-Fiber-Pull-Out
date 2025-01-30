@@ -3,10 +3,11 @@ this code was made with the help of chatgpt, claude, stackoverflow .... u name i
 """
 
 # src/core/data_statistics.py
-from src.config.settings import naming_storage, sort_storage, calculated_storage
+from src.config.settings import naming_storage, sort_storage
 import logging
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 class MeasurementAnalyzer:
     """
@@ -14,6 +15,8 @@ class MeasurementAnalyzer:
     """
     def __init__(self):
         self.measurements_data = []  # Liste für alle Messungen
+        self.max_forces_data = []  # Liste aller Maximalkräfter jeder erfolgreichen Messung
+        self.embeddinglengths = []  # Liste aller Einbettlängen
 
     def get_measurement_paths(self) -> list[Path]:
         """
@@ -21,11 +24,12 @@ class MeasurementAnalyzer:
         """
         return [
             naming_storage.root_path / f"{filename}.txt"
-            for filename in sort_storage.good_ones
-        ]
+            for filename in sort_storage.good_ones]
 
     def read_single_measurement(self, file_path: Path) -> list[tuple[float, float]]:
-        """Reads and processes a single measurement file."""
+        """
+        Reads and processes a single measurement file.
+        """
         df = pd.read_csv(
             file_path,
             delimiter="\t",
@@ -33,22 +37,19 @@ class MeasurementAnalyzer:
             skiprows=40,
             encoding='unicode_escape',
             names=["Time", "Distance", "Force"],
-            usecols=["Distance", "Force"]
-        )
-
+            usecols=["Distance", "Force"])
         # Datenbereinigung
         df = df[
             (df["Distance"] > 0) &
             (df["Distance"] < 1000) &
-            (df["Force"] >= 0)
-            ]
-
+            (df["Force"] >= 0)]
         return list(zip(df["Distance"], df["Force"]))
 
     def read_all_measurements(self):
-        """Reads and processes all successful measurements."""
+        """
+        Reads and processes all successful measurements.
+        """
         measurement_paths = self.get_measurement_paths()
-
         for path in measurement_paths:
             try:
                 measurement_data = self.read_single_measurement(path)
@@ -57,19 +58,54 @@ class MeasurementAnalyzer:
                 logger = logging.getLogger('SFPO_Analyzer')
                 logger.error(f"Fehler beim Lesen von {path}: {e}")
 
+    def find_max_force_single(self, measurement: list[tuple[float, float]]) -> float:
+        """
+        Findet die maximale Kraft in einer einzelnen Messung.
+        Args: measurement: Liste von (distance, force) Tupeln einer Messung
+        Returns: Maximale Kraft als float
+        """
+        # erstelle Liste mit Kraftwerten
+        # Jedes Tupel hat (distance, force) == ([0],[1]), wir wollen nur force, also Index 1
+        forces = [point[1] for point in measurement]
+        # Finde das Maximum
+        max_force = max(forces)
+        return max_force
+
+    def find_all_max_forces(self):
+        """
+        Findet die maximalen Kräfte aller erfolgreichen Messungen
+        und speichert sie in dieser Klasse für weitere Berechnungen.
+        """
+        for measurement in self.measurements_data:
+            max_force = self.find_max_force_single(measurement)
+            self.max_forces_data.append(max_force)
+
+    def mittelwert(self) -> float:
+        """
+        erzeugt den Mittelwert von Zahlen
+        """
+        return float(np.mean(self.max_forces_data))
+
+    def standardabweichung_maxmeanforce(self) -> float:
+        """
+        erzeugt die Standardabweichung der maximalen Kräfte der erfolgreichen Pull Outs
+        """
+        return float(np.std(self.max_forces_data))
+
+    def find_single_embeddinglength(self, measurement: list[tuple[float, float]]) -> float:
+        # erstelle Liste mit Distanzwerten
+        # Jedes Tupel hat (distance, force) == ([0],[1]), wir wollen nur force, also Index 0
+        distance = [point[0] for point in measurement]
+        # Finde das Maximum
+        embeddinglength = max(distance)
+        return embeddinglength
+
+    def find_all_embeddinglengths(self):
+        for measurement in self.measurements_data:
+            max_distance = self.find_single_embeddinglength()
+            self.embeddinglengths.append(max_distance)
+
 '''
-    def fiberpulloutratio(self,data):
-        # ratio how many fibers were successfully pulled out
-         = len(Config.acceptresults)
-        bad = len(Config.abortresults)
-        ratio = (good / (good + bad))
-        resultratio = round(ratio, 2)
-        Config.fiberratioresult.append(resultratio)
-
-    def extract_max_force(self, data):
-        # Extraktion der maximalen Kraft
-        pass
-
     def calculate_integral(self, force_data, displacement_data):
         # Integration der Kraft-Weg-Kurve
         pass
