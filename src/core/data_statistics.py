@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import math
 
 class MeasurementAnalyzer:
     """
@@ -17,6 +18,8 @@ class MeasurementAnalyzer:
         self.measurements_data = []  # Liste für alle Messungen
         self.max_forces_data = []  # Liste aller Maximalkräfter jeder erfolgreichen Messung
         self.embeddinglengths = []  # Liste aller Einbettlängen
+        self.fiberdiameters = []
+        self.ifssvalues = []
 
     def get_measurement_paths(self) -> list[Path]:
         """
@@ -105,14 +108,50 @@ class MeasurementAnalyzer:
             max_distance = self.find_single_embeddinglength(measurement)
             self.embeddinglengths.append(max_distance)
 
-'''
-    def calculate_integral(self, force_data, displacement_data):
-        # Integration der Kraft-Weg-Kurve
-        pass
+    def find_single_fiberdiameter(self, file_path: Path) -> float:
+        """Liest den Faserdurchmesser aus einer einzelnen Messdatei."""
+        try:
+            with open(file_path, 'r') as file:
+                for i, line in enumerate(file, 1):
+                    if i == 20:
+                        diameter_str = line.split('\t')[1].strip()
+                        return float(diameter_str)
+            raise ValueError(f"Zeile 20 nicht gefunden in {file_path}")
+        except Exception as e:
+            print(f"Fehler beim Lesen des Faserdurchmessers: {e}")
+            return 0.0  # oder einen anderen sinnvollen Standardwert
 
-    def standardize_data(self, data):
-        # Standardisierung der Daten
-        pass
+
+    def process_all_fiberdiameters(self):
+        """Verarbeitet die Faserdurchmesser aller erfolgreichen Messungen."""
+        self.fiberdiameters = []  # Liste im __init__ definieren
+
+        paths = self.get_measurement_paths()
+        for path in paths:
+            diameter = self.find_single_fiberdiameter(path)
+            self.fiberdiameters.append(diameter)
+
+    def interfaceshearstrength(self):
+        """
+        Berechnet die scheinbare Grenzflächenscherfestigkeit (IFSS) für alle Messungen.
+        Die Berechnung erfolgt in N/µm² und wird in MPa umgerechnet.
+        """
+        # Zuerst sicherstellen, dass wir alle benötigten Werte haben
+        if not self.fiberdiameters:
+            self.process_all_fiberdiameters()
+
+        # Für jede Messung IFSS berechnen
+        for i, measurement in enumerate(self.measurements_data):
+            max_force = self.find_max_force_single(measurement)
+            embedding_length = self.find_single_embeddinglength(measurement)
+            fiber_diameter = self.fiberdiameters[i]  # Nutze den entsprechenden Durchmesser
+
+            # Berechnung der IFSS
+            ifss = (max_force / (math.pi * embedding_length * fiber_diameter)) * (10 ** 6)
+            self.ifssvalues.append(round(ifss, 2))
+
+
+'''
 
     def interfaceshearstrength():  # apparent IFSS - the easy one
         # calculated in N/µm² = 1*10^(12) Pa = 1*10^(6) MPa =
