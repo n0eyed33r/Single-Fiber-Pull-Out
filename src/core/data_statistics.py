@@ -21,13 +21,15 @@ class MeasurementAnalyzer:
         self.embeddinglengths = []  # Liste aller Einbettlängen
         self.fiberdiameters = []
         self.ifssvalues = []
+        self.works = []
 
         # Mapping für statistische Berechnungen
         self.data_mapping = {
             'forces': self.max_forces_data,
             'lengths': self.embeddinglengths,
             'diameters': self.fiberdiameters,
-            'ifss': self.ifssvalues}
+            'ifss': self.ifssvalues,
+            'works': self.works}
 
     def get_measurement_paths(self) -> list[Path]:
         """
@@ -180,6 +182,53 @@ class MeasurementAnalyzer:
             except Exception as e:
                 print(f"Fehler bei Messung {i}: {e}")
 
+    def calculate_single_work(self, measurement: list[tuple[float, float]], embedding_length: float) -> float:
+        """
+        Berechnet die verrichtete Arbeit für eine einzelne Messung durch Integration.
+        Args: measurement: Liste von (distance, force) Tupeln einer Messung
+            embedding_length: Maximale Einbettlänge für diese Messung
+        Returns: float: Berechnete Arbeit in µJ (Mikro-Joule)
+        """
+        # Extrahiere Weg- und Kraftwerte aus den Tupeln
+        distances = [point[0] for point in measurement]
+        forces = [point[1] for point in measurement]
+        # Konvertiere zu NumPy Arrays für effiziente Berechnung
+        distance_array = np.array(distances)
+        force_array = np.array(forces)
+        # Beschränke die Daten auf den Bereich bis zur Einbettlänge
+        mask = distance_array <= embedding_length
+        limited_distances = distance_array[mask]
+        limited_forces = force_array[mask]
+        # Sicherheitsprüfung der Datenlängen
+        if len(limited_distances) != len(limited_forces):
+            raise ValueError("Ungleiche Anzahl von Weg- und Kraftwerten nach Längenbegrenzung")
+        # Berechne das Integral (Arbeit)
+        work = np.trapezoid(limited_forces, limited_distances)
+        return round(work, 2)
+
+    def calculate_all_works(self):
+        """
+        Berechnet die verrichtete Arbeit für alle Messungen.
+        Speichert die Ergebnisse in self.works für weitere Berechnungen.
+        """
+        # Initialisiere die Liste für die Arbeitswerte
+        self.works = []
+        # Für jede Messung die Arbeit berechnen
+        for measurement, embedding_length in zip(self.measurements_data, self.embeddinglengths):
+            try:
+                work = self.calculate_single_work(measurement, embedding_length)
+                self.works.append(work)
+            except Exception as e:
+                print(f"Fehler bei der Arbeitsberechnung: {e}")
+        # Aktualisiere das Mapping für statistische Berechnungen
+        self.data_mapping = {
+            'forces': self.max_forces_data,
+            'lengths': self.embeddinglengths,
+            'diameters': self.fiberdiameters,
+            'ifss': self.ifssvalues,
+            'works': self.works  # Füge die Arbeit zum Mapping hinzu
+        }
+
     def calculate_mean(self, data_type: str) -> float:
         """Berechnet den Mittelwert für einen bestimmten Datentyp."""
         # Aktualisiere das Mapping mit den aktuellen Listen
@@ -212,11 +261,7 @@ class MeasurementAnalyzer:
             return 0.0
         return float(np.std(data))
 
-
-
-
 '''
-
     def work():  # Integral in Abhaengigkeit der Embeddinglength
         for i in range(len(Config.measurements)):
             messreihe = Config.measurements[i]

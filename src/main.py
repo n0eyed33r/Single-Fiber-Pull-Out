@@ -56,6 +56,12 @@ def main():
         f"Faserdurchmesser: {analyzer.calculate_mean('diameters'):.2f} ± {analyzer.calculate_stddev('diameters'):.2f} µm")
     print(f"IFSS: {analyzer.calculate_mean('ifss'):.2f} ± {analyzer.calculate_stddev('ifss'):.2f} MPa")
 
+    # Nach den anderen Berechnungen
+    analyzer.calculate_all_works()
+
+    # Bei den statistischen Auswertungen
+    print(f"Verrichtete Arbeit: {analyzer.calculate_mean('works'):.2f} ± {analyzer.calculate_stddev('works'):.2f} µJ")
+
     logger.info("Analysis completed")
 
 '''    # plotting
