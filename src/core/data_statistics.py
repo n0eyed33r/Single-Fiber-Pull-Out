@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import math
 
+
 class MeasurementAnalyzer:
     """
     All calculations and statistical evaluations are performed in this class.
@@ -20,6 +21,13 @@ class MeasurementAnalyzer:
         self.embeddinglengths = []  # Liste aller Einbettlängen
         self.fiberdiameters = []
         self.ifssvalues = []
+
+        # Mapping für statistische Berechnungen
+        self.data_mapping = {
+            'forces': self.max_forces_data,
+            'lengths': self.embeddinglengths,
+            'diameters': self.fiberdiameters,
+            'ifss': self.ifssvalues}
 
     def get_measurement_paths(self) -> list[Path]:
         """
@@ -83,18 +91,6 @@ class MeasurementAnalyzer:
             max_force = self.find_max_force_single(measurement)
             self.max_forces_data.append(max_force)
 
-    def mittelwert(self) -> float:
-        """
-        erzeugt den Mittelwert von Zahlen
-        """
-        return float(np.mean(self.max_forces_data))
-
-    def standardabweichung_maxmeanforce(self) -> float:
-        """
-        erzeugt die Standardabweichung der maximalen Kräfte der erfolgreichen Pull Outs
-        """
-        return float(np.std(self.max_forces_data))
-
     def find_single_embeddinglength(self, measurement: list[tuple[float, float]]) -> float:
         # erstelle Liste mit Distanzwerten
         # Jedes Tupel hat (distance, force) == ([0],[1]), wir wollen nur force, also Index 0
@@ -121,47 +117,105 @@ class MeasurementAnalyzer:
             print(f"Fehler beim Lesen des Faserdurchmessers: {e}")
             return 0.0  # oder einen anderen sinnvollen Standardwert
 
-
     def process_all_fiberdiameters(self):
         """Verarbeitet die Faserdurchmesser aller erfolgreichen Messungen."""
-        self.fiberdiameters = []  # Liste im __init__ definieren
+        self.fiberdiameters = []  # Liste zurücksetzen
 
         paths = self.get_measurement_paths()
-        for path in paths:
-            diameter = self.find_single_fiberdiameter(path)
-            self.fiberdiameters.append(diameter)
+        print(f"\nVerarbeite {len(paths)} Dateien für Faserdurchmesser:")
+
+        for i, path in enumerate(paths, 1):
+            try:
+                diameter = self.find_single_fiberdiameter(path)
+                print(f"  Datei {i}: Durchmesser = {diameter}")
+                self.fiberdiameters.append(diameter)
+            except Exception as e:
+                print(f"  Fehler bei Datei {i}: {e}")
+
+    def check_data_consistency(self):
+        """Überprüft ob alle Datenlisten die gleiche Länge haben und zeigt Details"""
+        measurements_len = len(self.measurements_data)
+        fiber_len = len(self.fiberdiameters)
+        paths_len = len(self.get_measurement_paths())
+
+        print("\nDatenmengen:")
+        print(f"Gefundene Dateipfade: {paths_len}")
+        print(f"Eingelesene Messungen: {measurements_len}")
+        print(f"Gefundene Faserdurchmesser: {fiber_len}")
+
+        if fiber_len != measurements_len:
+            print("\nWarnung: Ungleiche Längen!")
+
+            # Zeige die tatsächlichen Daten für Debugging
+            print("\nDateipfade:")
+            for path in self.get_measurement_paths():
+                print(f"  {path}")
+
+            print("\nFaserdurchmesser:")
+            for dia in self.fiberdiameters:
+                print(f"  {dia}")
+
+        return measurements_len == fiber_len
 
     def interfaceshearstrength(self):
         """
         Berechnet die scheinbare Grenzflächenscherfestigkeit (IFSS) für alle Messungen.
-        Die Berechnung erfolgt in N/µm² und wird in MPa umgerechnet.
         """
         # Zuerst sicherstellen, dass wir alle benötigten Werte haben
         if not self.fiberdiameters:
             self.process_all_fiberdiameters()
-
+        # Prüfe Datenkonsistenz
+        if not self.check_data_consistency():
+            raise ValueError("Ungleiche Anzahl von Messungen und Faserdurchmessern!")
+        self.ifssvalues = []  # Liste zurücksetzen
         # Für jede Messung IFSS berechnen
         for i, measurement in enumerate(self.measurements_data):
-            max_force = self.find_max_force_single(measurement)
-            embedding_length = self.find_single_embeddinglength(measurement)
-            fiber_diameter = self.fiberdiameters[i]  # Nutze den entsprechenden Durchmesser
+            try:
+                max_force = self.find_max_force_single(measurement)
+                embedding_length = self.find_single_embeddinglength(measurement)
+                fiber_diameter = self.fiberdiameters[i]
+                # Berechnung der IFSS
+                ifss = (max_force / (math.pi * embedding_length * fiber_diameter)) * (10 ** 6)
+                self.ifssvalues.append(round(ifss, 2))
+            except Exception as e:
+                print(f"Fehler bei Messung {i}: {e}")
 
-            # Berechnung der IFSS
-            ifss = (max_force / (math.pi * embedding_length * fiber_diameter)) * (10 ** 6)
-            self.ifssvalues.append(round(ifss, 2))
+    def calculate_mean(self, data_type: str) -> float:
+        """Berechnet den Mittelwert für einen bestimmten Datentyp."""
+        # Aktualisiere das Mapping mit den aktuellen Listen
+        self.data_mapping = {
+            'forces': self.max_forces_data,
+            'lengths': self.embeddinglengths,
+            'diameters': self.fiberdiameters,
+            'ifss': self.ifssvalues}
+        if data_type not in self.data_mapping:
+            raise ValueError(f"Unbekannter Datentyp: {data_type}")
+        data = self.data_mapping[data_type]
+        if not data:
+            print("Warnung: Keine Daten in der Liste!")
+            return 0.0
+        result = float(np.mean(data))
+        print(f"Berechneter Mittelwert: {result}")
+        return result
+
+    def calculate_stddev(self, data_type: str) -> float:
+        """
+        Berechnet die Standardabweichung für einen bestimmten Datentyp.
+        Args: data_type: String der angibt, welche Daten verwendet werden sollen
+              ('forces', 'lengths', 'diameters', 'ifss')
+        Returns: Standardabweichung der gewählten Daten
+        """
+        if data_type not in self.data_mapping:
+            raise ValueError(f"Unbekannter Datentyp: {data_type}")
+        data = self.data_mapping[data_type]
+        if not data:
+            return 0.0
+        return float(np.std(data))
+
+
 
 
 '''
-
-    def interfaceshearstrength():  # apparent IFSS - the easy one
-        # calculated in N/µm² = 1*10^(12) Pa = 1*10^(6) MPa =
-        # 1'000*10^(3) MPa = 1*1'000 GPa
-        for messung in range(len(Config.measurements)):
-            ifssvalue = (SFPO_config.maxforces[messung] / (
-                    math.pi * SFPO_config.embeddinglength[messung]
-                    * SFPO_config.fiberdiameters[messung]
-            )) * (10 ** 6)  # ** means ^ like 10^(6)
-            Config.ifss.append(round(ifssvalue, 2))
 
     def work():  # Integral in Abhaengigkeit der Embeddinglength
         for i in range(len(Config.measurements)):
@@ -292,3 +346,4 @@ class MeasurementAnalyzer:
         workrelstdv = (workstdv / meanworkmean) * 100 if (
                 meanworkmean != 0) else 0
         Config.workrelstdv = round(workrelstdv, 2)'''
+

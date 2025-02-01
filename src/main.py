@@ -10,13 +10,13 @@ from src.utils.logger_setup import LoggerSetup
 from src.core.data_plotting import DataPlotter
 
 def main():
-    # Setup logging
+    # setup logging
     logger = LoggerSetup.setup_logger()
     debug_printer = DebugPrinter()
-
+    # startin logging
     logger.info("Starting SFPO Analysis")
 
-    # initialising and data grap
+    # initialising and data grab
     selected_path = FileHandler.select_folder()
     if not selected_path:
         logger.warning("No folder selected - program terminated")
@@ -30,33 +30,31 @@ def main():
     DataSorter.analyze_filenames()
     debug_printer.print_sorting_results()
 
-    # analyze measurements instancing
+    # instantiate class
     analyzer = MeasurementAnalyzer()
 
     # proof of finding the path
     paths = analyzer.get_measurement_paths()
     print(f"Gefundene Messpfade:{len(paths)}")
 
-    # Messungen einlesen
+    # read measurements
     analyzer.read_all_measurements()
     print(f"Eingelesene Messunge: {len(analyzer.measurements_data)}")
 
-    # get max forces of all successfully measurements
-    max_forces = analyzer.find_all_max_forces()
-    print(f"Liste der maximalen Kräfte aller erfolgreichen Messungen"
-          f"{max_forces}")
-    mean_force = analyzer.mittelwert()
-    std_mean_force = analyzer.standardabweichung_maxmeanforce()
-    print(f"Mittelwert der Maximalen Auszugskräfte ist: "
-          f"{round(mean_force, 3)}"+" +- "+
-          f"{round(std_mean_force, 3)} N")
-
-    # get max distance of all successfully measurements
+    # calculating
+    analyzer.process_all_fiberdiameters()
+    analyzer.check_data_consistency()
+    analyzer.find_all_max_forces()
     analyzer.find_all_embeddinglengths()
-    print(f"\n")
-    print(f"Einbettlängen sind: {analyzer.embeddinglengths}")
+    analyzer.interfaceshearstrength()
 
-
+    # Statistische Auswertungen
+    print("\nStatistische Auswertung:")
+    print(f"Maximalkräfte: {analyzer.calculate_mean('forces'):.2f} ± {analyzer.calculate_stddev('forces'):.2f} N")
+    print(f"Einbettlängen: {analyzer.calculate_mean('lengths'):.2f} ± {analyzer.calculate_stddev('lengths'):.2f} µm")
+    print(
+        f"Faserdurchmesser: {analyzer.calculate_mean('diameters'):.2f} ± {analyzer.calculate_stddev('diameters'):.2f} µm")
+    print(f"IFSS: {analyzer.calculate_mean('ifss'):.2f} ± {analyzer.calculate_stddev('ifss'):.2f} MPa")
 
     logger.info("Analysis completed")
 
