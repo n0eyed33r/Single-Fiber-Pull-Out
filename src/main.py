@@ -62,6 +62,23 @@ def main():
     # Bei den statistischen Auswertungen
     print(f"Verrichtete Arbeit: {analyzer.calculate_mean('works'):.2f} ± {analyzer.calculate_stddev('works'):.2f} µJ")
 
+    analyzer.calculate_all_work_intervals()
+
+    # Debug-Ausgabe der Intervalle
+    print("\nArbeitsintervalle:")
+    for i, intervals in enumerate(analyzer.work_intervals, 1):
+        print(f"Messung {i}: {intervals}")
+
+    analyzer.calculate_normed_intervals()
+    analyzer.calculate_interval_statistics()
+
+    print("\nStatistik der normierten Intervalle:")
+    for i in range(10):
+        print(f"Intervall {i + 1}: "
+              f"{analyzer.mean_normed_intervals[i]:.3f} ± "
+              f"{analyzer.stddev_normed_intervals[i]:.3f} "
+              f"(rel. Stdabw: {analyzer.rel_stddev_normed_intervals[i]:.1%})")
+
     logger.info("Analysis completed")
 
 '''    # plotting

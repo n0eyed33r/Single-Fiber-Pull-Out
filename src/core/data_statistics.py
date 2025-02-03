@@ -22,14 +22,29 @@ class MeasurementAnalyzer:
         self.fiberdiameters = []
         self.ifssvalues = []
         self.works = []
+        self.work_intervals = []
+        self.normed_intervals = []  # Neue Liste für normierte Intervalle
+        self.mean_normed_intervals = []  # Mittelwerte
+        self.stddev_normed_intervals = []  # Standardabweichungen
+        self.rel_stddev_normed_intervals = []  # Relative Standardabweichungen
+        self._update_mapping()
 
-        # Mapping für statistische Berechnungen
+    def _update_mapping(self):
+        """ Private Methode zum Aktualisieren des data_mappings.
+        Wird intern aufgerufen, wenn das Mapping aktuell sein muss.
+        """
         self.data_mapping = {
             'forces': self.max_forces_data,
             'lengths': self.embeddinglengths,
             'diameters': self.fiberdiameters,
             'ifss': self.ifssvalues,
-            'works': self.works}
+            'works': self.works,
+            'work_intervals': self.work_intervals,
+            'normed_intervals': self.normed_intervals,
+            'mean_normed': self.mean_normed_intervals,
+            'stddev_normed': self.stddev_normed_intervals,
+            'rel_stddev_normed': self.rel_stddev_normed_intervals
+        }
 
     def get_measurement_paths(self) -> list[Path]:
         """
@@ -221,22 +236,12 @@ class MeasurementAnalyzer:
             except Exception as e:
                 print(f"Fehler bei der Arbeitsberechnung: {e}")
         # Aktualisiere das Mapping für statistische Berechnungen
-        self.data_mapping = {
-            'forces': self.max_forces_data,
-            'lengths': self.embeddinglengths,
-            'diameters': self.fiberdiameters,
-            'ifss': self.ifssvalues,
-            'works': self.works  # Füge die Arbeit zum Mapping hinzu
-        }
+        self.data_mapping.update({'works': self.works})
 
     def calculate_mean(self, data_type: str) -> float:
         """Berechnet den Mittelwert für einen bestimmten Datentyp."""
         # Aktualisiere das Mapping mit den aktuellen Listen
-        self.data_mapping = {
-            'forces': self.max_forces_data,
-            'lengths': self.embeddinglengths,
-            'diameters': self.fiberdiameters,
-            'ifss': self.ifssvalues}
+        self._update_mapping()
         if data_type not in self.data_mapping:
             raise ValueError(f"Unbekannter Datentyp: {data_type}")
         data = self.data_mapping[data_type]
@@ -248,12 +253,9 @@ class MeasurementAnalyzer:
         return result
 
     def calculate_stddev(self, data_type: str) -> float:
+        """ berechne die Standardabweichung
         """
-        Berechnet die Standardabweichung für einen bestimmten Datentyp.
-        Args: data_type: String der angibt, welche Daten verwendet werden sollen
-              ('forces', 'lengths', 'diameters', 'ifss')
-        Returns: Standardabweichung der gewählten Daten
-        """
+        self._update_mapping()  # Mapping aktualisieren
         if data_type not in self.data_mapping:
             raise ValueError(f"Unbekannter Datentyp: {data_type}")
         data = self.data_mapping[data_type]
@@ -261,134 +263,89 @@ class MeasurementAnalyzer:
             return 0.0
         return float(np.std(data))
 
-'''
-    def work():  # Integral in Abhaengigkeit der Embeddinglength
-        for i in range(len(Config.measurements)):
-            messreihe = Config.measurements[i]
-            # Verwenden Sie die embeddinglength als das Ende der Messung
-            embedding_length = SFPO_config.embeddinglength[i]
-            # build array
-            x = [tupel[0] for tupel in messreihe]  # Weg
-            y = [tupel[1] for tupel in messreihe]  # Kraft
-            xarray = np.array(x)
-            yarray = np.array(y)
-            # embedding length as limitation
-            xarrayemblen = xarray[xarray <= embedding_length]
-            yarrayemblen = yarray[:len(xarrayemblen)]
-            if len(xarrayemblen) == len(yarrayemblen):
-                pass  # flag of truth
-            else:
-                print("Error: x_intervall und y_intervall are not equal")
-            integral = np.trapz(yarrayemblen, xarrayemblen)
-            SFPO_config.wtotal.append(round(integral, 2))
-        # print('Wtotal' + str(SFPO_config.wtotal))
-
-    def workintervall():
-    for i in range(len(Config.measurements)):
-        messreihe = Config.measurements[i]
-        # Verwenden Sie die embeddinglength als das Ende der Messung
-        embedding_length = SFPO_config.embeddinglength[i]
-        # build array
-        x = [tupel[0] for tupel in messreihe]  # Weg
-        y = [tupel[1] for tupel in messreihe]  # Kraft
-        xarray = np.array(x)
-        yarray = np.array(y)
-        # embedding length as limitation
-        xarrayemblen = xarray[xarray <= embedding_length]
-        yarrayemblen = yarray[:len(xarrayemblen)]
-        if len(xarrayemblen) == len(yarrayemblen):
-            pass  # flag of truth
-        else:
-            print("Error: x_intervall und y_intervall are not equal")
-        integralintervalls = []
+    def calculate_single_work_intervals(self, measurement: list[tuple[float, float]], embedding_length: float) -> list[
+        float]:
+        """
+        Berechnet die Arbeit in 10 gleichen Intervallen für eine einzelne Messung.
+        Args:   measurement: Liste von (distance, force) Tupeln einer Messung
+                embedding_length: Maximale Einbettlänge für diese Messung
+        Returns:Liste mit 10 Arbeitswerten, einer für jedes 10%-Intervall
+        """
+        # Extrahiere Weg- und Kraftwerte
+        distances = np.array([point[0] for point in measurement])
+        forces = np.array([point[1] for point in measurement])
+        # Beschränke auf Einbettlänge
+        mask = distances <= embedding_length
+        limited_distances = distances[mask]
+        limited_forces = forces[mask]
+        interval_works = []
+        # Berechne Arbeit für jedes 10%-Intervall
         for k in range(10):
             start_percent = k * 10
             end_percent = (k + 1) * 10
             start_x = round(embedding_length * start_percent / 100, 4)
             end_x = round(embedding_length * end_percent / 100, 4)
-            # print('Start x: ' + str(start_x))
-            # print('End x: ' + str(end_x))
-            # print('Difference x: ' + str(round(end_x-start_x,2)))
-            # Wählen Sie die X-Werte aus, die in diesem Intervall liegen
-            mask = (start_x <= xarrayemblen) & (xarrayemblen <= end_x)
-            # print(mask)
-            x_intervall = xarrayemblen[mask]
-            y_intervall = yarrayemblen[mask]
-            # print(len(x_intervall), len(y_intervall))
-            if len(x_intervall) == len(y_intervall):
-                pass  # flag of truth
+            # Finde Werte im aktuellen Intervall
+            interval_mask = (start_x <= limited_distances) & (limited_distances <= end_x)
+            x_interval = limited_distances[interval_mask]
+            y_interval = limited_forces[interval_mask]
+            if len(x_interval) != len(y_interval):
+                print(f"Warnung: Ungleiche Längen im Intervall {k + 1}")
+                continue
+            if len(x_interval) > 0:  # Prüfe ob Daten im Intervall vorhanden
+                integral = np.trapezoid(y_interval, x_interval)
+                interval_works.append(round(integral, 2))
             else:
-                print("Error: x_intervall und y_intervall are not equal")
-            xarray_intervall = np.array(x_intervall)
-            yarray_intervall = np.array(y_intervall)
-            integral = np.trapz(yarray_intervall, xarray_intervall)
-            # print(integral)
-            # print('\n')
-            integralintervalls.append(round(integral, 2))
-        # Speichern der Werte in einer Unterliste in SFPO_config
-        Config.tenthints.append(integralintervalls)
-    # print(SFPO_config.tenthints)
-    # print(type(SFPO_config.tenthints))
-    # print(SFPO_config.tenthints)
+                interval_works.append(0.0)
+        return interval_works
 
-    def normedintervalls():
-        # Durch die Listen in workintervall und wtotal iterieren
-        for work_values, wtotal_value in zip(
-                SFPO_config.tenthints, SFPO_config.wtotal):
-            # Teilen der Werte in work_values durch wtotal_value und speichern der Ergebnisse
-            divided_result = [round(x / wtotal_value, 4) for x in work_values]
-            # Die Ergebnisse zur Liste divided_values hinzufügen
-            SFPO_config.normedintervalls.append(divided_result)
 
-    def statisticnormedinterv():
-        data = SFPO_config.normedintervalls
-        # Extrahiere die Punkte an jeder Position in den Unterlisten
-        all_points = [[dataset[i] for dataset in data] for i in range(len(data[0]))]
-        # Berechne den Mittelwert und die Standardabweichung für jeden Punkt
-        means = [round(np.mean(points), 3) for points in all_points]
-        std_devs = [round(np.std(points), 3) for points in all_points]
-        # Berechne die relativen Standardabweichungen
-        # (Standardabweichung / Mittelwert)
-        relative_std_devs = [round(std_dev / mean, 4) if mean != 0 else 0 for mean, std_dev in zip(means, std_devs)]
-        # Rückgabe der Mittelwerte und Standardabweichungen
-        SFPO_config.meansnormedintervalls.append(means)
-        SFPO_config.stddevsnormedintervalls.append(std_devs)
-        SFPO_config.relstddevsnormedintervalls.append(relative_std_devs)
+    def calculate_all_work_intervals(self):
+        """Berechnet die Arbeitsintervalle für alle Messungen."""
+        self.work_intervals = []  # Liste zurücksetzen
+        for measurement, embedding_length in zip(self.measurements_data, self.embeddinglengths):
+            try:
+                intervals = self.calculate_single_work_intervals(measurement, embedding_length)
+                self.work_intervals.append(intervals)
+            except Exception as e:
+                print(f"Fehler bei der Intervallberechnung: {e}")
+        self._update_mapping()  # Mapping aktualisieren
 
-    def meaningless():
-        # meaningless diameters
-        fiberdmeans = statistics.mean([float(x) for x in Config.fiberdiameters])
-        Config.fiberdmean = round(fiberdmeans, 2)
-        fiberdmeansstdv = statistics.stdev([float(x) for x in Config.fiberdiameters])
-        Config.fiberdmeanstdv = round(fiberdmeansstdv, 2)
-        # meaningless force
-        maxforcemean = statistics.mean(Config.maxforces)
-        Config.meanforce = round(maxforcemean, 2)
-        forcestdv = statistics.stdev(Config.maxforces)
-        Config.forcestdv = round(forcestdv, 2)
-        forcerelstdv = (forcestdv / maxforcemean) * 100 if (
-                maxforcemean != 0) else 0
-        Config.forcerelstdv = round(forcerelstdv, 2)
-        # meaningless work
-        averages = []
-        for item in Config.wtotal:
-            sublist = item  # Die Liste an der zweiten Stelle des Tupels
-            sublistmean = np.mean(sublist)
-            averages.append(sublistmean)
-        # meaningless ifss
-        ifssmean = statistics.mean(Config.ifss)
-        Config.meanifss = round(ifssmean, 2)
-        ifssstdv = statistics.stdev(Config.ifss)
-        Config.ifssstdv = round(ifssstdv, 2)
-        ifssrelstdv = (ifssstdv / ifssmean) * 100 if (
-                ifssmean != 0) else 0
-        Config.ifssrelstdv = round(ifssrelstdv, 2)
-        # Mittelwert der gemittelten Listen
-        meanworkmean = np.mean(averages)
-        Config.meanwork = round(meanworkmean, 2)
-        workstdv = statistics.stdev(averages)
-        Config.workstdv = round(workstdv, 2)
-        workrelstdv = (workstdv / meanworkmean) * 100 if (
-                meanworkmean != 0) else 0
-        Config.workrelstdv = round(workrelstdv, 2)'''
+    def calculate_normed_intervals(self):
+        """Normiert die Arbeitsintervalle durch Division durch die Gesamtarbeit."""
+        self.normed_intervals = []
 
+        # Iteriere über Intervalle und Gesamtarbeiten
+        for intervals, total_work in zip(self.work_intervals, self.works):
+            if total_work != 0:  # Verhindere Division durch Null
+                normed_values = [round(interval / total_work, 4)
+                                 for interval in intervals]
+                self.normed_intervals.append(normed_values)
+            else:
+                print("Warnung: Gesamtarbeit ist 0, überspringen dieser Messung")
+        self._update_mapping()
+
+    def calculate_interval_statistics(self):
+        """Berechnet statistische Werte für die normierten Intervalle."""
+        if not self.normed_intervals:
+            print("Keine normierten Intervalle vorhanden")
+            return
+        # Für jede Intervallposition (0-9) über alle Messungen
+        n_intervals = len(self.normed_intervals[0])  # Sollte 10 sein
+        # Sammle Werte für jede Position
+        interval_positions = [[] for _ in range(n_intervals)]
+        for normed_measurement in self.normed_intervals:
+            for i, value in enumerate(normed_measurement):
+                interval_positions[i].append(value)
+        # Berechne Statistiken für jede Position
+        self.mean_normed_intervals = []
+        self.stddev_normed_intervals = []
+        self.rel_stddev_normed_intervals = []
+        for values in interval_positions:
+            mean = np.mean(values)
+            stddev = np.std(values)
+            rel_stddev = (stddev / mean) if mean != 0 else 0
+            self.mean_normed_intervals.append(round(mean, 3))
+            self.stddev_normed_intervals.append(round(stddev, 3))
+            self.rel_stddev_normed_intervals.append(round(rel_stddev, 4))
+        self._update_mapping()
