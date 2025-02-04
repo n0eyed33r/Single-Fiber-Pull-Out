@@ -1,7 +1,7 @@
 # src/core/data_plotting.py
 import matplotlib.pyplot as plt
 from pathlib import Path
-
+import numpy as np
 
 class DataPlotter:
     @staticmethod
