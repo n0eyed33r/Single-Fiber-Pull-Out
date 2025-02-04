@@ -1,25 +1,43 @@
-"""
-this code was made with the help of chatgpt, claude, stackoverflow .... u name it
-"""
 # src/core/data_plotting.py
 import matplotlib.pyplot as plt
-import numpy as np
 from src.core.data_statistics import MeasurementAnalyzer
+from pathlib import Path
 
 class DataPlotter:
-
     def __init__(self, analyzer: 'MeasurementAnalyzer'):
         self.analyzer = analyzer
 
-    def save_plot(self, save_path: str):
-        """Erstellt und speichert den Plot als PNG"""
-        plt.figure(figsize=(10, 6))
-        # Erstelle eine Farbpalette basierend auf der Anzahl der Messungen
-        # plasma_colors wird automatisch die Farben über den gesamten Bereich der Colormap verteilen
-        number_of_measurements = len(self.analyzer.measurements_data)
-        plasma_colors = plt.cm.plasma(np.linspace(0, 1, number_of_measurements))
+    @staticmethod
+    def save_plots_for_series(analyzers_dict: dict, plots_folder: Path):
+        """
+        Erstellt und speichert Plots für alle Messreihen.
+        Args:
+            analyzers_dict: Dictionary mit {Probenname: Analyzer}
+            plots_folder: Ordner zum Speichern der Plots
+        """
+        for name, analyzer in analyzers_dict.items():
+            plt.figure(figsize=(10, 6))
 
-        # Plotte jede Messung mit ihrer eigenen Farbe aus der Plasma-Palette
+            # Plotte alle Messungen dieser Serie
+            for i, measurement in enumerate(analyzer.measurements_data, 1):
+                distances, forces = zip(*measurement)
+                plt.plot(distances, forces, label=f'Messung {i}')
+
+            plt.xlabel('Distance [µm]')
+            plt.ylabel('Force [N]')
+            plt.title(f'Pull-Out Messungen - {name}')
+            plt.legend()
+            plt.grid(True)
+
+            # Speichere Plot
+            plot_path = plots_folder / f"{name}_plot.png"
+            plt.savefig(plot_path)
+            plt.close()  # Wichtig: Figure schließen um Speicher freizugeben
+
+    def save_plot(self, save_path: str):
+        """Speichert einen einzelnen Plot"""
+        plt.figure(figsize=(10, 6))
+
         for i, measurement in enumerate(self.analyzer.measurements_data, 1):
             distances, forces = zip(*measurement)
             plt.plot(distances, forces, label=f'Messung {i}')
@@ -30,6 +48,5 @@ class DataPlotter:
         plt.legend()
         plt.grid(True)
 
-        # Speichere Plot
         plt.savefig(save_path)
-        plt.close()  # Schließe Figure um Speicher freizugeben
+        plt.close()

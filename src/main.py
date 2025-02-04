@@ -9,6 +9,7 @@ from src.core.excel_exporter import ExcelExporter
 from src.config.settings import naming_storage
 from pathlib import Path
 
+
 def process_single_series(logger, debug_printer, folder_path=None):
     """Verarbeitet eine einzelne Messreihe
     Args:
@@ -85,6 +86,7 @@ def process_single_series(logger, debug_printer, folder_path=None):
         logger.error(f"Unerwarteter Fehler: {e}")
         return None
 
+
 def main():
     # Setup logging
     logger = LoggerSetup.setup_logger()
@@ -105,35 +107,43 @@ def main():
         # Mehrfachanalyse
         parent_folder = FileHandler.select_folder(analysis_type='2')
         if not parent_folder:
-           logger.warning("Kein Ordner ausgewählt")
-           return
+            logger.warning("Kein Ordner ausgewählt")
+            return
 
         exporter = ExcelExporter()
         series_folders = FileHandler.get_measurement_series_folders(parent_folder)
-        last_successful_analyzer = None  # Hier die Variable initialisieren
+        analyzers_dict = {}  # Dictionary für alle erfolgreichen Analysen
+        last_successful_analyzer = None
 
         for folder in series_folders:
             logger.info(f"\nAnalysiere Messreihe: {folder.name}")
-            # Übergebe den Ordnerpfad direkt
             analyzer = process_single_series(logger, debug_printer, folder)
             if analyzer:
-                exporter.add_measurement_series(folder.name, analyzer)
-                last_successful_analyzer = analyzer  # Hier den letzten erfolgreichen Analyzer speichern
+                name = folder.name
+                exporter.add_measurement_series(name, analyzer)
+                analyzers_dict[name] = analyzer  # Speichere Analyzer im Dictionary
+                last_successful_analyzer = analyzer
             else:
                 logger.warning(f"Überspringe Messreihe {folder.name} - Analyse fehlgeschlagen")
 
-        # Beim Speichern der Ergebnisse
-        save_path = exporter.save_to_excel()
-        if save_path and isinstance(save_path, Path):  # Prüfe ob ein gültiger Pfad zurückgegeben wurde
-            png_path = save_path.with_suffix('.png')
-            # Speichere Plot, aber nur wenn es erfolgreiche Analysen gab
-            if last_successful_analyzer:
-                plotter = DataPlotter(last_successful_analyzer)
-                plotter.save_plot(str(png_path))
-            else:
-                logger.warning("Keine erfolgreichen Analysen für Plot vorhanden")
+        if analyzers_dict:  # Wenn erfolgreiche Analysen vorhanden
+            # Speichere Hauptergebnisse
+            save_path = exporter.save_to_excel()
+            if save_path and isinstance(save_path, Path):
+                # Speichere Arbeitsintervalle
+                intervals_path = exporter.save_work_intervals_to_excel()
+
+                # Speichere Plots
+                plots_folder = save_path.parent / "plots"
+                plots_folder.mkdir(exist_ok=True)
+                DataPlotter.save_plots_for_series(analyzers_dict, plots_folder)
+
+                logger.info(f"Ergebnisse gespeichert in: {save_path.parent}")
+        else:
+            logger.warning("Keine erfolgreichen Analysen durchgeführt")
 
     logger.info("Analysis completed")
 
+
 if __name__ == "__main__":
-   main()
+    main()
