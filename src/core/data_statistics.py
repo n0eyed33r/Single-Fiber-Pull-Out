@@ -191,7 +191,7 @@ class MeasurementAnalyzer:
                 max_force = self.find_max_force_single(measurement)
                 embedding_length = self.find_single_embeddinglength(measurement)
                 fiber_diameter = self.fiberdiameters[i]
-                # Berechnung der IFSS
+                # Berechnung der IFSS -> F_max/(PI*l_e*d)
                 ifss = (max_force / (math.pi * embedding_length * fiber_diameter)) * (10 ** 6)
                 self.ifssvalues.append(round(ifss, 2))
             except Exception as e:
@@ -210,16 +210,21 @@ class MeasurementAnalyzer:
         # Konvertiere zu NumPy Arrays für effiziente Berechnung
         distance_array = np.array(distances)
         force_array = np.array(forces)
+
+        # Begrenze embedding_length auf 1000 µm
+        max_allowed_length = 1000.0
+        embedding_length = min(embedding_length, max_allowed_length)
         # Beschränke die Daten auf den Bereich bis zur Einbettlänge
         mask = distance_array <= embedding_length
         limited_distances = distance_array[mask]
         limited_forces = force_array[mask]
+
         # Sicherheitsprüfung der Datenlängen
         if len(limited_distances) != len(limited_forces):
             raise ValueError("Ungleiche Anzahl von Weg- und Kraftwerten nach Längenbegrenzung")
         # Berechne das Integral (Arbeit)
         work = np.trapezoid(limited_forces, limited_distances)
-        return round(work, 2)
+        return round(work, 3)
 
     def calculate_all_works(self):
         """
@@ -274,11 +279,16 @@ class MeasurementAnalyzer:
         # Extrahiere Weg- und Kraftwerte
         distances = np.array([point[0] for point in measurement])
         forces = np.array([point[1] for point in measurement])
+
+        # Begrenze embedding_length auf 1000 µm
+        max_allowed_length = 1000.0
+        embedding_length = min(embedding_length, max_allowed_length)
         # Beschränke auf Einbettlänge
         mask = distances <= embedding_length
         limited_distances = distances[mask]
         limited_forces = forces[mask]
         interval_works = []
+
         # Berechne Arbeit für jedes 10%-Intervall
         for k in range(10):
             start_percent = k * 10
@@ -294,11 +304,10 @@ class MeasurementAnalyzer:
                 continue
             if len(x_interval) > 0:  # Prüfe ob Daten im Intervall vorhanden
                 integral = np.trapezoid(y_interval, x_interval)
-                interval_works.append(round(integral, 2))
+                interval_works.append(round(integral, 3))
             else:
                 interval_works.append(0.0)
         return interval_works
-
 
     def calculate_all_work_intervals(self):
         """Berechnet die Arbeitsintervalle für alle Messungen."""
@@ -312,9 +321,8 @@ class MeasurementAnalyzer:
         self._update_mapping()  # Mapping aktualisieren
 
     def calculate_normed_intervals(self):
-        """ Normiert die Arbeitsintervalle durch Division durch die Gesamtarbeit."""
+        """Normiert die Arbeitsintervalle durch Division durch die Gesamtarbeit."""
         self.normed_intervals = []
-
         # Iteriere über Intervalle und Gesamtarbeiten
         for intervals, total_work in zip(self.work_intervals, self.works):
             if total_work != 0:  # Verhindere Division durch Null

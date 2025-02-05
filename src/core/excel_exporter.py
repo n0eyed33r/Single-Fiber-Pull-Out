@@ -1,5 +1,6 @@
 # src/core/excel_exporter.py
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -87,16 +88,98 @@ class ExcelExporter:
         )
 
         if file_path:
-            # Erstelle Dictionary für DataFrame
-            data = {}
-            for name, analyzer in self.interval_data.items():
-                data[name] = analyzer.mean_normed_intervals
+            # Excel Writer erstellen
+            with pd.ExcelWriter(file_path) as writer:
+                # Erstes Sheet: Bisherige Arbeitsintervalle
+                data = {}
+                for name, analyzer in self.interval_data.items():
+                    data[name] = analyzer.mean_normed_intervals
+                df = pd.DataFrame(data)
+                df.index = [f"Intervall {i + 1}" for i in range(10)]
+                df.to_excel(writer, sheet_name='Arbeitsintervalle')
 
-            # Erstelle DataFrame mit beschrifteten Zeilen
-            df = pd.DataFrame(data)
-            df.index = [f"Intervall {i + 1}" for i in range(10)]
+                # Zweites Sheet: Normierte Intervalle mit Standardabweichungen
+                normed_data = {}
+                for name, analyzer in self.interval_data.items():
+                    # Für jeden Probennamen zwei Spalten: Wert und Standardabweichung
+                    normed_data[f"{name}"] = analyzer.mean_normed_intervals
+                    normed_data[f"{name}_std"] = analyzer.stddev_normed_intervals
 
-            # Speichere mit Zeilenüberschriften
-            df.to_excel(file_path)
-            return Path(file_path)
+                normed_df = pd.DataFrame(normed_data)
+                normed_df.index = [f"Intervall {i + 1}" for i in range(10)]
+                normed_df.to_excel(writer, sheet_name='Normierte Intervalle')
+
+                return Path(file_path)
+        return None
+
+    def save_boxplot_data_to_excel(self) -> Optional[Path]:
+        """Speichert die Boxplot-Daten (F_max und Arbeit) in einer Excel-Datei."""
+        root = tk.Tk()
+        root.withdraw()
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"SFPO_Boxplot_Daten_{timestamp}.xlsx"
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            initialfile=default_filename,
+            filetypes=[("Excel files", "*.xlsx")],
+            title="Speicherort für Boxplot-Daten wählen"
+        )
+
+        if file_path:
+            with pd.ExcelWriter(file_path) as writer:
+                # Sheet für F_max Daten
+                fmax_data = {}
+                for name, analyzer in self.interval_data.items():
+                    fmax_data[name] = pd.Series(analyzer.max_forces_data)
+
+                df_fmax = pd.DataFrame(fmax_data)
+                df_fmax.index = [f"Messung {i + 1}" for i in range(len(df_fmax))]
+
+                # Statistiken für F_max hinzufügen
+                stats_fmax = pd.DataFrame({
+                    name: {
+                        'Mittelwert': np.mean(data),
+                        'Standardabweichung': np.std(data),
+                        'Minimum': np.min(data),
+                        'Q1': np.percentile(data, 25),
+                        'Median': np.median(data),
+                        'Q3': np.percentile(data, 75),
+                        'Maximum': np.max(data)
+                    }
+                    for name, data in fmax_data.items()
+                }).T  # Transponieren für bessere Lesbarkeit
+
+                # F_max Daten und Statistiken in separaten Sheets speichern
+                df_fmax.to_excel(writer, sheet_name='F_max Werte')
+                stats_fmax.to_excel(writer, sheet_name='F_max Statistiken')
+
+                # Sheet für Arbeitsdaten
+                work_data = {}
+                for name, analyzer in self.interval_data.items():
+                    work_data[name] = pd.Series(analyzer.works)
+
+                df_work = pd.DataFrame(work_data)
+                df_work.index = [f"Messung {i + 1}" for i in range(len(df_work))]
+
+                # Statistiken für Arbeit hinzufügen
+                stats_work = pd.DataFrame({
+                    name: {
+                        'Mittelwert': np.mean(data),
+                        'Standardabweichung': np.std(data),
+                        'Minimum': np.min(data),
+                        'Q1': np.percentile(data, 25),
+                        'Median': np.median(data),
+                        'Q3': np.percentile(data, 75),
+                        'Maximum': np.max(data)
+                    }
+                    for name, data in work_data.items()
+                }).T  # Transponieren für bessere Lesbarkeit
+
+                # Arbeitsdaten und Statistiken in separaten Sheets speichern
+                df_work.to_excel(writer, sheet_name='Arbeit Werte')
+                stats_work.to_excel(writer, sheet_name='Arbeit Statistiken')
+
+                return Path(file_path)
         return None

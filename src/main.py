@@ -132,11 +132,15 @@ def main():
             if save_path and isinstance(save_path, Path):
                 # Speichere Arbeitsintervalle
                 intervals_path = exporter.save_work_intervals_to_excel()
-
+                exporter.save_boxplot_data_to_excel()
                 # Speichere Plots
                 plots_folder = save_path.parent / "plots"
                 plots_folder.mkdir(exist_ok=True)
                 DataPlotter.save_plots_for_series(analyzers_dict, plots_folder)
+                # Speichere Boxplots
+                boxplots_folder = save_path.parent / "box_plots-auswertung"
+                boxplots_folder.mkdir(exist_ok=True)
+                DataPlotter.create_boxplots(analyzers_dict, boxplots_folder)
 
                 logger.info(f"Ergebnisse gespeichert in: {save_path.parent}")
         else:

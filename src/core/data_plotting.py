@@ -32,12 +32,13 @@ class DataPlotter:
             # Achsenlimits und Ticks setzen
             plt.xlim(0, 1000)
             plt.ylim(0, 0.3)
-            plt.xticks(np.arange(0, 1001, 200))
-            plt.yticks(np.arange(0, 0.31, 0.05))
+            plt.xticks(np.arange(0, 1001, 200),fontsize=22, fontweight='bold')
+            plt.yticks(np.arange(0, 0.31, 0.05),fontsize=22, fontweight='bold')
 
             # Beschriftungen
-            plt.xlabel('Distance [µm]')
-            plt.ylabel('Force [N]')
+            plt.title(name, fontsize=24, fontweight='bold')
+            plt.xlabel('Distance [µm]', fontsize=24, fontweight='bold')
+            plt.ylabel('Force [N]', fontsize=24, fontweight='bold')
             # Ersetze Unterstriche im Titel durch Leerzeichen
             title = name.replace('_', ' ')
             plt.title(title)
@@ -48,4 +49,39 @@ class DataPlotter:
             # Speichere Plot
             plot_path = plots_folder / f"{name}_plot.png"
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close()
+
+    @staticmethod
+    def create_boxplots(analyzers_dict: dict, plots_folder: Path):
+        """Erstellt separate Boxplots für F_max und Arbeit für jede Messreihe."""
+
+        for name, analyzer in analyzers_dict.items():
+            # F_max Boxplot für diese Messreihe
+            plt.figure(figsize=(10, 6))
+            plt.boxplot([analyzer.max_forces_data], labels=[name])
+            plt.title(f'Maximalkräfte - {name}', fontsize=24, fontweight='bold')
+            plt.ylabel('F_max [N]', fontsize=24, fontweight='bold')
+            plt.xlabel('Probe', fontsize=24, fontweight='bold')
+            plt.xticks(fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True)
+
+            # Speichere F_max Plot
+            fmax_path = plots_folder / f"boxplot_fmax_{name}.png"
+            plt.savefig(fmax_path, bbox_inches='tight')
+            plt.close()
+
+            # Arbeits-Boxplot für diese Messreihe
+            plt.figure(figsize=(10, 3))
+            plt.boxplot([analyzer.works], labels=[name])
+            plt.title(f'Verrichtete Arbeit - {name}', fontsize=24, fontweight='bold')
+            plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
+            plt.xlabel('Probe', fontsize=24, fontweight='bold')
+            plt.xticks(fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True)
+
+            # Speichere Arbeits-Plot
+            work_path = plots_folder / f"boxplot_work_{name}.png"
+            plt.savefig(work_path, bbox_inches='tight')
             plt.close()
