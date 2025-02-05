@@ -37,6 +37,9 @@ class LoggerSetup:
                     print(f"Warnung: Keine Schreibrechte im Verzeichnis {log_dir}")
                     return logger
 
+                # Hier die Verwaltung der Log-Dateien aufrufen
+                LoggerSetup.manage_log_files(log_dir)
+                
                 # Erstelle neue Log-Datei
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 log_file = log_dir / f"debug_log_{timestamp}.txt"
@@ -70,3 +73,35 @@ class LoggerSetup:
             basic_logger = logging.getLogger('SFPO_Analyzer_Basic')
             basic_logger.addHandler(logging.StreamHandler(sys.stdout))
             return basic_logger
+
+    # src/utils/logger_setup.py
+    @staticmethod
+    def manage_log_files(log_dir: Path, max_files: int = 5):
+        """
+        Verwaltet die Log-Dateien im angegebenen Verzeichnis.
+        """
+        print("\n=== Log File Management ===")  # Deutliche Trennung
+
+        # Sammle alle debug_log Dateien
+        log_files = list(log_dir.glob("debug_log_*.txt"))
+
+        print(f"Gefundene Log-Dateien: {len(log_files)}")
+        print("Dateien im Log-Verzeichnis:")
+        for file in log_files:
+            print(f"  • {file.name} - Geändert: {datetime.fromtimestamp(file.stat().st_mtime)}")
+
+        if len(log_files) > max_files:
+            print(f"\nLösche alte Logs (behalte {max_files} neueste Dateien):")
+            # Sortiere Dateien nach Änderungsdatum (neueste zuerst)
+            log_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+            # Lösche überzählige Dateien
+            for old_file in log_files[max_files:]:
+                try:
+                    print(f"  Lösche: {old_file.name}")
+                    old_file.unlink()
+                    print(f"  ✓ Erfolgreich gelöscht")
+                except Exception as e:
+                    print(f"  ✗ Fehler beim Löschen: {e}")
+
+            print("=== Log Management Ende ===\n")

@@ -312,7 +312,7 @@ class MeasurementAnalyzer:
         self._update_mapping()  # Mapping aktualisieren
 
     def calculate_normed_intervals(self):
-        """Normiert die Arbeitsintervalle durch Division durch die Gesamtarbeit."""
+        """ Normiert die Arbeitsintervalle durch Division durch die Gesamtarbeit."""
         self.normed_intervals = []
 
         # Iteriere über Intervalle und Gesamtarbeiten
