@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 
 
 class MeasurementAnalyzer:
@@ -378,3 +379,29 @@ class MeasurementAnalyzer:
             'z_scores': z_scores,
             'robust_z_scores': robust_z_scores
         }
+
+    def plot_z_scores(self, data: list, name: str, plots_folder: Path):
+        """Erstellt Plots für Z-Scores."""
+        z_data = self.calculate_z_scores(data)
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+        # Plot klassische Z-Scores
+        ax1.scatter(range(len(data)), z_data['z_scores'])
+        ax1.axhline(y=0, color='r', linestyle='-')
+        ax1.axhline(y=2, color='r', linestyle='--')
+        ax1.axhline(y=-2, color='r', linestyle='--')
+        ax1.set_title('Klassische Z-Scores', fontsize=24, fontweight='bold')
+        ax1.set_ylabel('Z-Score', fontsize=24, fontweight='bold')
+        ax1.grid(True)
+
+        # Plot robuste Z-Scores
+        ax2.scatter(range(len(data)), z_data['robust_z_scores'])
+        ax2.axhline(y=0, color='r', linestyle='-')
+        ax2.axhline(y=2, color='r', linestyle='--')
+        ax2.axhline(y=-2, color='r', linestyle='--')
+        ax2.set_title('Robuste Z-Scores', fontsize=24, fontweight='bold')
+        ax2.grid(True)
+
+        plt.savefig(plots_folder / f"z_scores_{name}.png", bbox_inches='tight')
+        plt.close()

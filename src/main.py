@@ -141,6 +141,14 @@ def main():
                 boxplots_folder = save_path.parent / "box_plots-auswertung"
                 boxplots_folder.mkdir(exist_ok=True)
                 DataPlotter.create_boxplots(analyzers_dict, boxplots_folder)
+                # Speicher Violin
+                violin_folder = save_path.parent / "violin_plots-auswertung"
+                violin_folder.mkdir(exist_ok=True)
+                DataPlotter.create_violin_plots(analyzers_dict, violin_folder)
+                # Speichere Z-Score
+                zscore_folder = save_path.parent / "zscore_plots-auswertung"
+                zscore_folder.mkdir(exist_ok=True)
+                DataPlotter.create_z_score_plots(analyzers_dict, zscore_folder)
 
                 logger.info(f"Ergebnisse gespeichert in: {save_path.parent}")
         else:

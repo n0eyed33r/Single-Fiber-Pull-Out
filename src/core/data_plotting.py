@@ -72,7 +72,7 @@ class DataPlotter:
             plt.close()
 
             # Arbeits-Boxplot für diese Messreihe
-            plt.figure(figsize=(10, 3))
+            plt.figure(figsize=(10, 10))
             plt.boxplot([analyzer.works], labels=[name])
             plt.title(f'Verrichtete Arbeit - {name}', fontsize=24, fontweight='bold')
             plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
