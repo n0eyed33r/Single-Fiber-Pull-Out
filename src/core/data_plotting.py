@@ -85,3 +85,42 @@ class DataPlotter:
             work_path = plots_folder / f"boxplot_work_{name}.png"
             plt.savefig(work_path, bbox_inches='tight')
             plt.close()
+
+    def create_violin_plots(analyzers_dict: dict, plots_folder: Path):
+        """Erstellt Violin Plots mit robusten Statistiken."""
+        for name, analyzer in analyzers_dict.items():
+            # F_max Violin Plot
+            plt.figure(figsize=(10, 6))
+            violin_parts = plt.violinplot(analyzer.max_forces_data, showmeans=False, showmedians=True)
+
+            # Formatierung wie gewünscht
+            plt.title(f'Maximalkräfte - {name}', fontsize=24, fontweight='bold')
+            plt.ylabel('F_max [N]', fontsize=24, fontweight='bold')
+            plt.xlabel('Probe', fontsize=24, fontweight='bold')
+            plt.xticks([1], [name], fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+
+            plt.grid(True)
+            plt.savefig(plots_folder / f"violin_fmax_{name}.png", bbox_inches='tight')
+            plt.close()
+
+    @staticmethod
+    def create_z_score_plots(analyzers_dict: dict, plots_folder: Path):
+        """Erstellt Z-Score Plots für alle Messreihen."""
+        z_scores_folder = plots_folder / "z_scores"
+        z_scores_folder.mkdir(exist_ok=True)
+
+        for name, analyzer in analyzers_dict.items():
+            # Z-Scores für F_max
+            analyzer.plot_z_scores(
+                analyzer.max_forces_data,
+                f"{name}_fmax",
+                z_scores_folder
+            )
+
+            # Z-Scores für Arbeit
+            analyzer.plot_z_scores(
+                analyzer.works,
+                f"{name}_work",
+                z_scores_folder
+            )

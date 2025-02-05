@@ -357,3 +357,24 @@ class MeasurementAnalyzer:
             self.stddev_normed_intervals.append(round(stddev, 3))
             self.rel_stddev_normed_intervals.append(round(rel_stddev, 4))
         self._update_mapping()
+
+    def calculate_z_scores(self, data: list) -> dict:
+        """
+        Berechnet Z-Scores und robuste Z-Scores.
+
+        Klassische Z-Scores: (x - mean) / std
+        Robuste Z-Scores: (x - median) / (IQR/1.349)
+        """
+        # Klassische Z-Standardisierung
+        z_scores = (data - np.mean(data)) / np.std(data)
+
+        # Robuste Z-Standardisierung
+        median = np.median(data)
+        iqr = np.percentile(data, 75) - np.percentile(data, 25)
+        robust_scale = iqr / 1.349
+        robust_z_scores = (data - median) / robust_scale
+
+        return {
+            'z_scores': z_scores,
+            'robust_z_scores': robust_z_scores
+        }
