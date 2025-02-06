@@ -77,7 +77,11 @@ class FileHandler:
     @staticmethod
     def get_measurement_series_folders(parent_folder: Path) -> list[Path]:
         """Findet alle Unterordner, die Messreihen enthalten"""
-        return [f for f in parent_folder.iterdir() if f.is_dir()]
+        # Ignoriere spezielle Ordner wie 'plots', 'zscore_plots-auswertung' etc.
+        ignore_folders = {'plots', 'zscore_plots-auswertung', 'box_plots-auswertung',
+                          'violin_plots-auswertung'}
+        return [f for f in parent_folder.iterdir()
+                if f.is_dir() and f.name not in ignore_folders]
 
     @staticmethod
     def find_specimen_files() -> list[str]:

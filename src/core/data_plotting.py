@@ -105,22 +105,115 @@ class DataPlotter:
             plt.close()
 
     @staticmethod
-    def create_z_score_plots(analyzers_dict: dict, plots_folder: Path):
-        """Erstellt Z-Score Plots für alle Messreihen."""
-        z_scores_folder = plots_folder / "z_scores"
-        z_scores_folder.mkdir(exist_ok=True)
+    def plot_z_scores(name: str, data_dict: dict, save_path: Path) -> None:
+        """
+        Erstellt Z-Score Plots für einen Datensatz.
 
-        for name, analyzer in analyzers_dict.items():
-            # Z-Scores für F_max
-            analyzer.plot_z_scores(
-                analyzer.max_forces_data,
-                f"{name}_fmax",
-                z_scores_folder
-            )
+        Args:
+            name: Name der Messreihe
+            data_dict: Dictionary mit Z-Scores und Statistiken
+            save_path: Pfad zum Speichern des Plots
+        """
+        try:
+            # Prüfe, ob alle erforderlichen Daten vorhanden sind
+            required_keys = ['z_scores', 'robust_z_scores', 'mean', 'std', 'median', 'iqr']
+            if not all(key in data_dict for key in required_keys):
+                print(f"Warnung: Fehlende Daten für {name}")
+                return
 
-            # Z-Scores für Arbeit
-            analyzer.plot_z_scores(
-                analyzer.works,
-                f"{name}_work",
-                z_scores_folder
-            )
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            fig.suptitle(f'Z-Score Analyse - {name}', fontsize=16)
+
+            # Korrekte Plot-Einstellungen für matplotlib
+            plot_settings = {
+                's': 100,  # Punktgröße (statt markersize)
+                'alpha': 0.6
+            }
+
+            points = range(1, len(data_dict['z_scores']) + 1)
+
+            # Klassische Z-Scores
+            ax1.scatter(points, data_dict['z_scores'], color='blue', **plot_settings)
+            ax1.axhline(y=0, color='black', linestyle='-', alpha=0.3, linewidth=2)
+            ax1.axhline(y=2, color='red', linestyle='--', label='±2σ Grenze', linewidth=2)
+            ax1.axhline(y=-2, color='red', linestyle='--', linewidth=2)
+            ax1.set_title('Klassische Z-Scores', fontsize=24, fontweight='bold')
+            ax1.set_xlabel('Messung Nr.', fontsize=24, fontweight='bold')
+            ax1.set_ylabel('Z-Score', fontsize=24, fontweight='bold')
+            ax1.tick_params(axis='both', which='major', labelsize=22)
+            ax1.grid(True, alpha=0.3)
+            ax1.legend(fontsize=16)
+
+            # Statistische Information
+            stats_text = f'μ = {data_dict["mean"]:.2f}\nσ = {data_dict["std"]:.2f}'
+            ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes,
+                     verticalalignment='top', fontsize=12)
+
+            # Robuste Z-Scores
+            ax2.scatter(points, data_dict['robust_z_scores'], color='green', **plot_settings)
+            ax2.axhline(y=0, color='black', linestyle='-', alpha=0.3, linewidth=2)
+            ax2.axhline(y=2, color='red', linestyle='--', label='±2σ Grenze', linewidth=2)
+            ax2.axhline(y=-2, color='red', linestyle='--', linewidth=2)
+            ax2.set_title('Robuste Z-Scores', fontsize=24, fontweight='bold')
+            ax2.set_xlabel('Messung Nr.', fontsize=24, fontweight='bold')
+            ax2.set_ylabel('Robuster Z-Score', fontsize=24, fontweight='bold')
+            ax2.tick_params(axis='both', which='major', labelsize=22)
+            ax2.grid(True, alpha=0.3)
+            ax2.legend(fontsize=16)
+
+            # Robuste statistische Information
+            robust_stats = f'Median = {data_dict["median"]:.2f}\nIQR = {data_dict["iqr"]:.2f}'
+            ax2.text(0.02, 0.98, robust_stats, transform=ax2.transAxes,
+                     verticalalignment='top', fontsize=12)
+
+            plt.tight_layout()
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
+
+        except Exception as e:
+            print(f"Fehler beim Erstellen des Z-Score Plots für {name}: {str(e)}")
+            plt.close()  # Stelle sicher, dass Figure geschlossen wird
+
+    @staticmethod
+    def create_z_score_plots(analyzers_dict: dict, plots_folder: Path) -> None:
+        """
+        Erstellt Z-Score Plots für alle Messreihen.
+
+        Args:
+            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+            plots_folder: Ordner zum Speichern der Plots
+        """
+        try:
+            plots_folder.mkdir(exist_ok=True)
+
+            if not analyzers_dict:
+                print("Warnung: Keine Analyzer für Z-Score Plots verfügbar")
+                return
+
+            for name, analyzer in analyzers_dict.items():
+                try:
+                    # Hole Z-Score Daten vom Analyzer
+                    z_score_data = analyzer.get_z_score_data()
+
+                    # Erstelle Plots für Maximalkräfte
+                    if 'forces' in z_score_data:
+                        DataPlotter.plot_z_scores(
+                            name=f"{name}_Maximalkraft",
+                            data_dict=z_score_data['forces'],
+                            save_path=plots_folder / f"z_scores_{name}_fmax.png"
+                        )
+
+                    # Erstelle Plots für Arbeiten
+                    if 'works' in z_score_data:
+                        DataPlotter.plot_z_scores(
+                            name=f"{name}_Arbeit",
+                            data_dict=z_score_data['works'],
+                            save_path=plots_folder / f"z_scores_{name}_work.png"
+                        )
+
+                except Exception as e:
+                    print(f"Fehler bei der Verarbeitung von {name}: {str(e)}")
+                    continue
+
+        except Exception as e:
+            print(f"Fehler beim Erstellen der Z-Score Plots: {str(e)}")

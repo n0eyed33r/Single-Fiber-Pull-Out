@@ -360,48 +360,52 @@ class MeasurementAnalyzer:
         self._update_mapping()
 
     def calculate_z_scores(self, data: list) -> dict:
+        """Berechnet klassische und robuste Z-Scores für einen Datensatz.
+        Args:
+            data: Liste der Messwerte
+        Returns:
+            Dictionary mit beiden Z-Score Arten und zusätzlichen Statistiken
         """
-        Berechnet Z-Scores und robuste Z-Scores.
+        data_array = np.array(data)
+        data_array = data_array[~np.isnan(data_array)]
 
-        Klassische Z-Scores: (x - mean) / std
-        Robuste Z-Scores: (x - median) / (IQR/1.349)
-        """
-        # Klassische Z-Standardisierung
-        z_scores = (data - np.mean(data)) / np.std(data)
+        if len(data_array) < 2:
+            print("Warnung: Zu wenige Datenpunkte für Z-Score Berechnung")
+            return {
+                'z_scores': np.zeros_like(data_array),
+                'robust_z_scores': np.zeros_like(data_array),
+                'mean': 0,
+                'std': 0,
+                'median': 0,
+                'iqr': 0
+            }
 
-        # Robuste Z-Standardisierung
-        median = np.median(data)
-        iqr = np.percentile(data, 75) - np.percentile(data, 25)
+        # Klassische Statistiken
+        mean = np.mean(data_array)
+        std = np.std(data_array)
+        z_scores = np.zeros_like(data_array) if std == 0 else (data_array - mean) / std
+
+        # Robuste Statistiken
+        median = np.median(data_array)
+        iqr = np.percentile(data_array, 75) - np.percentile(data_array, 25)
         robust_scale = iqr / 1.349
-        robust_z_scores = (data - median) / robust_scale
+        robust_z_scores = np.zeros_like(data_array) if robust_scale == 0 else (data_array - median) / robust_scale
 
         return {
             'z_scores': z_scores,
-            'robust_z_scores': robust_z_scores
+            'robust_z_scores': robust_z_scores,
+            'mean': mean,
+            'std': std,
+            'median': median,
+            'iqr': iqr
         }
 
-    def plot_z_scores(self, data: list, name: str, plots_folder: Path):
-        """Erstellt Plots für Z-Scores."""
-        z_data = self.calculate_z_scores(data)
-
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-
-        # Plot klassische Z-Scores
-        ax1.scatter(range(len(data)), z_data['z_scores'])
-        ax1.axhline(y=0, color='r', linestyle='-')
-        ax1.axhline(y=2, color='r', linestyle='--')
-        ax1.axhline(y=-2, color='r', linestyle='--')
-        ax1.set_title('Klassische Z-Scores', fontsize=24, fontweight='bold')
-        ax1.set_ylabel('Z-Score', fontsize=24, fontweight='bold')
-        ax1.grid(True)
-
-        # Plot robuste Z-Scores
-        ax2.scatter(range(len(data)), z_data['robust_z_scores'])
-        ax2.axhline(y=0, color='r', linestyle='-')
-        ax2.axhline(y=2, color='r', linestyle='--')
-        ax2.axhline(y=-2, color='r', linestyle='--')
-        ax2.set_title('Robuste Z-Scores', fontsize=24, fontweight='bold')
-        ax2.grid(True)
-
-        plt.savefig(plots_folder / f"z_scores_{name}.png", bbox_inches='tight')
-        plt.close()
+    def get_z_score_data(self) -> dict:
+        """
+        Berechnet Z-Scores für alle relevanten Messgrößen.
+        Returns: Dictionary mit Z-Scores für verschiedene Messgrößen
+        """
+        return {
+            'forces': self.calculate_z_scores(self.max_forces_data),
+            'works': self.calculate_z_scores(self.works)
+        }
