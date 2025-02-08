@@ -20,7 +20,9 @@ class ExcelExporter:
             'IFSS [MPa]': [],
             'IFSS_std [MPa]': [],
             'Arbeit [µJ]': [],
-            'Arbeit_std [µJ]': []
+            'Arbeit_std [µJ]': [],
+            'Force Modulus [N/µm]': [],
+            'Force Modulus_std [N/µm]': []
         }
         # Dictionary für Arbeitsintervalle: {Probenname: Analyzer}
         self.interval_data = {}
@@ -38,6 +40,8 @@ class ExcelExporter:
             self.results['IFSS_std [MPa]'].append(analyzer.calculate_stddev('ifss'))
             self.results['Arbeit [µJ]'].append(analyzer.calculate_mean('works'))
             self.results['Arbeit_std [µJ]'].append(analyzer.calculate_stddev('works'))
+            self.results['Force Modulus [N/µm]'].append(analyzer.calculate_mean('force_modulus'))
+            self.results['Force Modulus_std [N/µm]'].append(analyzer.calculate_stddev('force_modulus'))
 
             # Analyzer für Intervalldaten speichern
             self.interval_data[name] = analyzer

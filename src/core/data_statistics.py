@@ -28,6 +28,7 @@ class MeasurementAnalyzer:
         self.mean_normed_intervals = []  # Mittelwerte
         self.stddev_normed_intervals = []  # Standardabweichungen
         self.rel_stddev_normed_intervals = []  # Relative Standardabweichungen
+        self.force_moduli = []  # Liste für die Verbundmodule
         self._update_mapping()
 
     def _update_mapping(self):
@@ -44,7 +45,8 @@ class MeasurementAnalyzer:
             'normed_intervals': self.normed_intervals,
             'mean_normed': self.mean_normed_intervals,
             'stddev_normed': self.stddev_normed_intervals,
-            'rel_stddev_normed': self.rel_stddev_normed_intervals
+            'rel_stddev_normed': self.rel_stddev_normed_intervals,
+            'force_modulus': self.force_moduli  # Neues Mapping für Verbundmodul
         }
 
     def get_measurement_paths(self) -> list[Path]:
@@ -409,3 +411,65 @@ class MeasurementAnalyzer:
             'forces': self.calculate_z_scores(self.max_forces_data),
             'works': self.calculate_z_scores(self.works)
         }
+
+    def calculate_force_modulus(self) -> None:
+        """
+        Berechnet den Verbundmodul (force_modulus) für alle Messungen.
+
+        Der Modul wird aus dem Anstieg zwischen 20% und 70% der Maximalkraft berechnet:
+        E_v = (F(70%) - F(20%)) / (s(70%) - s(20%))
+
+        Dabei werden die Messpunkte gesucht, die am nächsten an 20% bzw. 70%
+        der Maximalkraft liegen, um eine möglichst genaue Berechnung zu ermöglichen.
+        """
+        self.force_moduli = []  # Liste zurücksetzen
+
+        for measurement in self.measurements_data:
+            try:
+                # Finde maximale Kraft und deren Index
+                max_point = max(measurement, key=lambda point: point[1])
+                max_force = max_point[1]
+                max_force_index = measurement.index(max_point)
+
+                # Berechne die exakten Zielwerte (20% und 70% von F_max)
+                target_20 = max_force * 0.2
+                target_70 = max_force * 0.7
+
+                # Betrachte nur Punkte bis zum Maximum
+                points_before_max = measurement[:max_force_index + 1]
+
+                # Finde die Punkte, die am nächsten an 20% und 70% liegen
+                point_20 = min(points_before_max,
+                               key=lambda p: abs(p[1] - target_20))
+                point_70 = min(points_before_max,
+                               key=lambda p: abs(p[1] - target_70))
+
+                # Debug-Ausgaben
+                print(f"Maximalkraft: {max_force:.2f} N")
+                print(f"Zielwerte: 20% = {target_20:.2f} N, 70% = {target_70:.2f} N")
+                print(f"Gefundene Punkte:")
+                print(f"  20%: Kraft = {point_20[1]:.2f} N, Weg = {point_20[0]:.2f} µm")
+                print(f"  70%: Kraft = {point_70[1]:.2f} N, Weg = {point_70[0]:.2f} µm")
+
+                # Prüfe, ob die Punkte in der richtigen Reihenfolge sind
+                if point_20[0] >= point_70[0]:
+                    print("Warnung: 20%-Punkt liegt nach 70%-Punkt - Messung übersprungen")
+                    self.force_moduli.append(0.0)
+                    continue
+
+                # Berechne den Verbundmodul
+                delta_force = point_70[1] - point_20[1]  # Kraftdifferenz in N
+                delta_distance = point_70[0] - point_20[0]  # Wegdifferenz in µm
+
+                modulus = delta_force / delta_distance  # Ergebnis in N/µm
+                self.force_moduli.append(round(modulus, 4))
+
+                print(f"Verbundmodul: {modulus:.4f} N/µm")
+                print("------------------------")
+
+            except Exception as e:
+                print(f"Fehler bei der Modulberechnung: {e}")
+                self.force_moduli.append(0.0)
+
+        # Aktualisiere das Mapping
+        self._update_mapping()

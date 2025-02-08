@@ -50,6 +50,7 @@ def process_single_series(logger, debug_printer, folder_path=None):
         analyzer.find_all_max_forces()
         analyzer.find_all_embeddinglengths()
         analyzer.interfaceshearstrength()
+        analyzer.calculate_force_modulus()
 
         # Statistische Auswertungen
         print("\nStatistische Auswertung:")
@@ -57,7 +58,8 @@ def process_single_series(logger, debug_printer, folder_path=None):
         print(f"Einbettlängen: {analyzer.calculate_mean('lengths'):.2f} ± {analyzer.calculate_stddev('lengths'):.2f} µm")
         print(f"Faserdurchmesser: {analyzer.calculate_mean('diameters'):.2f} ± {analyzer.calculate_stddev('diameters'):.2f} µm")
         print(f"IFSS: {analyzer.calculate_mean('ifss'):.2f} ± {analyzer.calculate_stddev('ifss'):.2f} MPa")
-
+        print(f"Verbundmodul: {analyzer.calculate_mean('force_modulus'):.2f} ± "
+              f"{analyzer.calculate_stddev('force_modulus'):.2f} N/µm")
         # Arbeitsberechnungen
         analyzer.calculate_all_works()
         print(f"Verrichtete Arbeit: {analyzer.calculate_mean('works'):.2f} ± {analyzer.calculate_stddev('works'):.2f} µJ")
