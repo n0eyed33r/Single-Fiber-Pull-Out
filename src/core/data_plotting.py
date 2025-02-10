@@ -22,7 +22,7 @@ class DataPlotter:
         DataPlotter.setup_plot_style()  # Setze Grundstil
 
         for name, analyzer in analyzers_dict.items():
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(10, 7))
 
             # Plot jede Messung mit einer Farbe aus dem Plasma-Schema
             for i, (measurement, color) in enumerate(zip(analyzer.measurements_data, colors)):
@@ -37,13 +37,13 @@ class DataPlotter:
 
             # Beschriftungen
             plt.title(name, fontsize=24, fontweight='bold')
-            plt.xlabel('Distance [µm]', fontsize=24, fontweight='bold')
+            plt.xlabel('Displacement [µm]', fontsize=24, fontweight='bold')
             plt.ylabel('Force [N]', fontsize=24, fontweight='bold')
             # Ersetze Unterstriche im Titel durch Leerzeichen
             title = name.replace('_', ' ')
             plt.title(title)
 
-            plt.legend()
+            #plt.legend()
             plt.grid(True)
 
             # Speichere Plot
