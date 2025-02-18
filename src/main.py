@@ -25,6 +25,7 @@ class AnalysisConfig:
     # Plot-Erstellung
     create_standard_plots: bool = True  # Kraft-Weg-Diagramme
     create_boxplots: bool = True  # Boxplots für F_max und Arbeit
+    create_work_interval_plots: bool = True
     create_normalized_plots: bool = True  # Normierte Arbeitsplots
     create_violin_plots: bool = True  # Violin-Plots
     create_zscore_plots: bool = True  # Z-Score-Plots
@@ -252,6 +253,11 @@ def main():
                         boxplots_folder = plots_base_folder / "box_plots"
                         boxplots_folder.mkdir(exist_ok=True)
                         DataPlotter.create_boxplots(analyzers_dict, boxplots_folder)
+                    
+                    if full_analysis_config.create_work_interval_plots:  # Neue Option in AnalysisConfig
+                        work_intervals_folder = plots_base_folder / "arbeitsintervalle"
+                        work_intervals_folder.mkdir(exist_ok=True)
+                        DataPlotter.create_work_interval_plots(analyzers_dict, work_intervals_folder)
                     
                     if full_analysis_config.create_normalized_plots:
                         normalized_folder = plots_base_folder / "normierte_arbeit"

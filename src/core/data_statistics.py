@@ -17,12 +17,13 @@ class AnalysisConfig:
     """Konfigurationsklasse für die Steuerung der Analyseschritte"""
     # Berechnungen
     calculate_zscores: bool = False
-    calculate_force_moduli: bool = True
+    calculate_force_moduli: bool = False
     calculate_work_intervals: bool = True
     
     # Plot-Erstellung
     create_standard_plots: bool = True  # Kraft-Weg-Diagramme
     create_boxplots: bool = True  # Boxplots für F_max und Arbeit
+    create_work_interval_plots: bool = True  # Intervalle der Arbeit gemittelt
     create_normalized_plots: bool = True  # Normierte Arbeitsplots
     create_violin_plots: bool = False  # Violin-Plots
     create_zscore_plots: bool = False  # Z-Score-Plots
