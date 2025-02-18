@@ -18,34 +18,34 @@ class DataPlotter:
         """Erstellt und speichert Plots für alle Messreihen."""
         # Verwende Plasma-Farbschema
         colors = plt.cm.plasma(np.linspace(0, 1, 10))  # 10 Farben aus dem Plasma-Schema
-
+        
         DataPlotter.setup_plot_style()  # Setze Grundstil
-
+        
         for name, analyzer in analyzers_dict.items():
-            plt.figure(figsize=(10, 7))
-
+            plt.figure(figsize=(10, 8))
+            
             # Plot jede Messung mit einer Farbe aus dem Plasma-Schema
             for i, (measurement, color) in enumerate(zip(analyzer.measurements_data, colors)):
                 distances, forces = zip(*measurement)
                 plt.plot(distances, forces, color=color, label=f'Messung {i + 1}')
-
+                
             # Achsenlimits und Ticks setzen
             plt.xlim(0, 1000)
             plt.ylim(0, 0.3)
             plt.xticks(np.arange(0, 1001, 200),fontsize=22, fontweight='bold')
             plt.yticks(np.arange(0, 0.31, 0.05),fontsize=22, fontweight='bold')
-
+            
             # Beschriftungen
-            plt.title(name, fontsize=24, fontweight='bold')
+            # plt.title(name, fontsize=24, fontweight='bold')
             plt.xlabel('Displacement [µm]', fontsize=24, fontweight='bold')
             plt.ylabel('Force [N]', fontsize=24, fontweight='bold')
             # Ersetze Unterstriche im Titel durch Leerzeichen
             title = name.replace('_', ' ')
-            plt.title(title)
-
-            #plt.legend()
+            # plt.title(title)
+            
+            # plt.legend()
             plt.grid(True)
-
+            
             # Speichere Plot
             plot_path = plots_folder / f"{name}_plot.png"
             plt.savefig(plot_path, dpi=300, bbox_inches='tight')
@@ -54,10 +54,9 @@ class DataPlotter:
     @staticmethod
     def create_boxplots(analyzers_dict: dict, plots_folder: Path):
         """Erstellt separate Boxplots für F_max und Arbeit für jede Messreihe."""
-
         for name, analyzer in analyzers_dict.items():
             # F_max Boxplot für diese Messreihe
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(10, 7))
             plt.boxplot([analyzer.max_forces_data], labels=[name])
             plt.title(f'Maximalkräfte - {name}', fontsize=24, fontweight='bold')
             plt.ylabel('F_max [N]', fontsize=24, fontweight='bold')
@@ -65,12 +64,12 @@ class DataPlotter:
             plt.xticks(fontsize=22, fontweight='bold')
             plt.yticks(fontsize=22, fontweight='bold')
             plt.grid(True)
-
+            
             # Speichere F_max Plot
             fmax_path = plots_folder / f"boxplot_fmax_{name}.png"
             plt.savefig(fmax_path, bbox_inches='tight')
             plt.close()
-
+            
             # Arbeits-Boxplot für diese Messreihe
             plt.figure(figsize=(10, 10))
             plt.boxplot([analyzer.works], labels=[name])
@@ -80,12 +79,119 @@ class DataPlotter:
             plt.xticks(fontsize=22, fontweight='bold')
             plt.yticks(fontsize=22, fontweight='bold')
             plt.grid(True)
-
+            
             # Speichere Arbeits-Plot
             work_path = plots_folder / f"boxplot_work_{name}.png"
             plt.savefig(work_path, bbox_inches='tight')
             plt.close()
 
+    @staticmethod
+    def create_normalized_plots(analyzers_dict: dict, plots_folder: Path):
+        """Erstellt Plots für die normierte Arbeit jeder Messreihe."""
+        # Verwende Plasma-Farbschema für verschiedene Messungen
+        colors = plt.cm.plasma(np.linspace(0, 1, 10))
+        
+        for name, analyzer in analyzers_dict.items():
+            plt.figure(figsize=(10, 8))
+            
+            # Erstelle x-Achse in 20%-Schritten
+            x_points = np.array([0, 20, 40, 60, 80, 100])
+            
+            # Plot jede normierte Messung
+            for i, normed_intervals in enumerate(analyzer.normed_intervals):
+                # Konvertiere die 10 Intervalle in 5 Intervalle für 20%-Schritte
+                combined_intervals = [
+                    normed_intervals[j] + normed_intervals[j + 1]
+                    for j in range(0, len(normed_intervals), 2)
+                ]
+                
+                # Berechne kumulative Summe und füge 0 am Anfang hinzu
+                cumsum = np.insert(np.cumsum(combined_intervals), 0, 0)
+                
+                plt.plot(x_points, cumsum, color=colors[i % len(colors)],
+                         label=f'Messung {i + 1}')
+            
+            # Beschriftungen und Formatierung
+            plt.title(f'Normierte Arbeit - {name}', fontsize=24, fontweight='bold')
+            plt.xlabel('Relative Position [%]', fontsize=24, fontweight='bold')
+            plt.ylabel('Normierte Arbeit', fontsize=24, fontweight='bold')
+            plt.xticks(x_points, fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True)
+            plt.legend()
+            
+            # Speichere Plot
+            plot_path = plots_folder / f"normalized_work_{name}.png"
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close()
+
+    @staticmethod
+    def create_mean_normalized_plots(analyzers_dict: dict, plots_folder: Path):
+        """
+        Erstellt Plots für die Mittelwerte der normierten Arbeit mit Fehlerbalken
+        für die berechneten Standardabweichungen.
+
+        Diese Methode erzeugt für jede Messreihe einen Plot, der die durchschnittliche
+        normierte kumulative Arbeit als Linie darstellt. Die Standardabweichungen
+        werden als vertikale Fehlerbalken dargestellt.
+
+        Args:
+            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+            plots_folder: Ordner zum Speichern der Plots
+        """
+        for name, analyzer in analyzers_dict.items():
+            plt.figure(figsize=(10, 8))
+            
+            # Erstelle x-Achse in 10%-Schritten von 10% bis 100%
+            x_points = np.array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+            
+            # Berechne kumulative Mittelwerte und Standardabweichungen
+            means = []
+            stds = []
+            for i in range(len(x_points)):
+                # Sammle kumulative Summen bis zu dieser Position
+                cumulative_sums = []
+                for measurement in analyzer.normed_intervals:
+                    cum_sum = sum(measurement[:i + 1])
+                    cumulative_sums.append(cum_sum)
+                
+                means.append(np.mean(cumulative_sums))
+                stds.append(np.std(cumulative_sums))
+            
+            means = np.array(means)
+            stds = np.array(stds)
+            
+            # Plotte Mittelwertlinie mit Fehlerbalken
+            plt.errorbar(x_points, means,
+                         yerr=stds,  # Vertikale Fehlerbalken
+                         fmt='b-',  # Blaue durchgezogene Linie
+                         linewidth=2,  # Dicke der Hauptlinie
+                         ecolor='red',  # Farbe der Fehlerbalken
+                         elinewidth=1,  # Dicke der Fehlerbalken
+                         capsize=5,  # Größe der Endkappen
+                         capthick=1,  # Dicke der Endkappen
+                         label='Mittelwert mit Standardabweichung')
+            
+            # Beschriftungen und Formatierung
+            #plt.title(f'Normierte kumulative Arbeit - {name}',
+            #         fontsize=24, fontweight='bold')
+            plt.xlabel('Relative Position [%]', fontsize=24, fontweight='bold')
+            plt.ylabel('Normierte kumulative Arbeit', fontsize=24, fontweight='bold')
+            plt.xticks(x_points, fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True, linestyle='--', alpha=0.7)  # Gestrichelte Gitterlinien
+            #plt.legend(fontsize=16)
+            
+            # Achsenlimits setzen
+            plt.xlim(0, 105)  # Etwas Platz am Rand
+            plt.ylim(0, 1.2)  # Maximalwert sollte bei 1.0 liegen
+            
+            # Speichere Plot
+            plot_path = plots_folder / f"mean_normalized_work_{name}.png"
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close()
+
+    @staticmethod
     def create_violin_plots(analyzers_dict: dict, plots_folder: Path):
         """Erstellt Violin Plots mit robusten Statistiken."""
         for name, analyzer in analyzers_dict.items():
@@ -217,3 +323,70 @@ class DataPlotter:
 
         except Exception as e:
             print(f"Fehler beim Erstellen der Z-Score Plots: {str(e)}")
+
+
+'''    @staticmethod
+    def create_mean_plots(analyzers_dict: dict, plots_folder: Path):
+        """
+        Erstellt Plots für die Mittelwerte der normierten Arbeit mit Fehlerbalken
+        für die berechneten Standardabweichungen.
+
+        Diese Methode erzeugt für jede Messreihe einen Plot, der die durchschnittliche
+        normierte kumulative Arbeit als Linie darstellt. Die Standardabweichungen
+        werden als vertikale Fehlerbalken dargestellt.
+
+        Args:
+            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+            plots_folder: Ordner zum Speichern der Plots
+        """
+        for name, analyzer in analyzers_dict.items():
+            plt.figure(figsize=(10, 8))
+
+            # Erstelle x-Achse in 10%-Schritten von 10% bis 100%
+            x_points = np.array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+
+            # Berechne kumulative Mittelwerte und Standardabweichungen
+            means = []
+            stds = []
+            for i in range(len(x_points)):
+                # Sammle kumulative Summen bis zu dieser Position
+                cumulative_sums = []
+                for measurement in analyzer.normed_intervals:
+                    cum_sum = sum(measurement[:i + 1])
+                    cumulative_sums.append(cum_sum)
+
+                means.append(np.mean(cumulative_sums))
+                stds.append(np.std(cumulative_sums))
+
+            means = np.array(means)
+            stds = np.array(stds)
+
+            # Plotte Mittelwertlinie mit Fehlerbalken
+            plt.errorbar(x_points, means,
+                         yerr=stds,  # Vertikale Fehlerbalken
+                         fmt='b-',  # Blaue durchgezogene Linie
+                         linewidth=2,  # Dicke der Hauptlinie
+                         ecolor='red',  # Farbe der Fehlerbalken
+                         elinewidth=1,  # Dicke der Fehlerbalken
+                         capsize=5,  # Größe der Endkappen
+                         capthick=1,  # Dicke der Endkappen
+                         label='Mittelwert mit Standardabweichung')
+
+            # Beschriftungen und Formatierung
+            # plt.title(f'Normierte kumulative Arbeit - {name}',
+            #         fontsize=24, fontweight='bold')
+            plt.xlabel('Relative Position [%]', fontsize=24, fontweight='bold')
+            plt.ylabel('Normierte kumulative Arbeit', fontsize=24, fontweight='bold')
+            plt.xticks(x_points, fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True, linestyle='--', alpha=0.7)  # Gestrichelte Gitterlinien
+            # plt.legend(fontsize=16)
+
+            # Achsenlimits setzen
+            plt.xlim(0, 105)  # Etwas Platz am Rand
+            plt.ylim(0, 1.2)  # Maximalwert sollte bei 1.0 liegen
+
+            # Speichere Plot
+            plot_path = plots_folder / f"mean_normalized_work_{name}.png"
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close()'''

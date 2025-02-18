@@ -9,7 +9,26 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import math
-import matplotlib.pyplot as plt
+from dataclasses import dataclass
+
+
+@dataclass
+class AnalysisConfig:
+    """Konfigurationsklasse für die Steuerung der Analyseschritte"""
+    # Berechnungen
+    calculate_zscores: bool = False
+    calculate_force_moduli: bool = True
+    calculate_work_intervals: bool = True
+    
+    # Plot-Erstellung
+    create_standard_plots: bool = True  # Kraft-Weg-Diagramme
+    create_boxplots: bool = True  # Boxplots für F_max und Arbeit
+    create_normalized_plots: bool = True  # Normierte Arbeitsplots
+    create_violin_plots: bool = False  # Violin-Plots
+    create_zscore_plots: bool = False  # Z-Score-Plots
+    
+    # Export
+    export_to_excel: bool = True
 
 
 class MeasurementAnalyzer:
@@ -67,14 +86,14 @@ class MeasurementAnalyzer:
             header=None,
             skiprows=40,
             encoding='unicode_escape',
-            names=["Time", "Distance", "Force"],
-            usecols=["Distance", "Force"])
+            names=["Time", "Displacement", "Force"],
+            usecols=["Displacement", "Force"])
         # Datenbereinigung
         df = df[
-            (df["Distance"] > 0) &
-            (df["Distance"] < 1000) &
+            (df["Displacement"] > 0) &
+            (df["Displacement"] < 1000) &
             (df["Force"] >= 0)]
-        return list(zip(df["Distance"], df["Force"]))
+        return list(zip(df["Displacement"], df["Force"]))
 
     def read_all_measurements(self):
         """
@@ -271,8 +290,8 @@ class MeasurementAnalyzer:
             return 0.0
         return float(np.std(data))
 
-    def calculate_single_work_intervals(self, measurement: list[tuple[float, float]], embedding_length: float) -> list[
-        float]:
+    def calculate_single_work_intervals(self, measurement: list[tuple[float, float]],
+                                        embedding_length: float) -> list[float]:
         """
         Berechnet die Arbeit in 10 gleichen Intervallen für eine einzelne Messung.
         Args:   measurement: Liste von (distance, force) Tupeln einer Messung
@@ -282,7 +301,6 @@ class MeasurementAnalyzer:
         # Extrahiere Weg- und Kraftwerte
         distances = np.array([point[0] for point in measurement])
         forces = np.array([point[1] for point in measurement])
-
         # Begrenze embedding_length auf 1000 µm
         max_allowed_length = 1000.0
         embedding_length = min(embedding_length, max_allowed_length)
@@ -291,7 +309,6 @@ class MeasurementAnalyzer:
         limited_distances = distances[mask]
         limited_forces = forces[mask]
         interval_works = []
-
         # Berechne Arbeit für jedes 10%-Intervall
         for k in range(10):
             start_percent = k * 10
@@ -360,6 +377,40 @@ class MeasurementAnalyzer:
             self.stddev_normed_intervals.append(round(stddev, 3))
             self.rel_stddev_normed_intervals.append(round(rel_stddev, 4))
         self._update_mapping()
+    
+    def get_cumulative_normed_work_statistics(self) -> dict:
+        """
+        Berechnet die kumulativen statistischen Kennwerte der normierten Arbeit.
+        Nutzt die bestehenden Berechnungsmethoden für Mittelwert und Standardabweichung.
+
+        Returns:
+            Dictionary mit den kumulativen Werten für jede 10%-Position (10% bis 100%)
+        """
+        if not self.normed_intervals:
+            print("Keine normierten Intervalle vorhanden")
+            return {}
+        
+        statistics = {}
+        
+        # Für jede Position (10% bis 100%) berechnen wir die kumulative Summe
+        for position in range(1, 11):  # 1 bis 10 für 10% bis 100%
+            # Sammle kumulative Summen bis zu dieser Position
+            cumulative_sums = []
+            for measurement in self.normed_intervals:
+                cum_sum = sum(measurement[:position])
+                cumulative_sums.append(cum_sum)
+            
+            # Berechne Statistiken mit den bestehenden Methoden
+            mean = np.mean(cumulative_sums)
+            std = np.std(cumulative_sums)
+            
+            position_key = f"{position * 10}%"
+            statistics[position_key] = {
+                "mean": round(mean, 4),
+                "std": round(std, 4)
+            }
+        
+        return statistics
 
     def calculate_z_scores(self, data: list) -> dict:
         """Berechnet klassische und robuste Z-Scores für einen Datensatz.
