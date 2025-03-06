@@ -1,9 +1,21 @@
+"""
+this code was made with the help of chatgpt, claude, gemini, stackoverflow .... u name it
+"""
 # src/core/data_plotting.py
 import matplotlib.pyplot as plt
 from pathlib import Path
 import numpy as np
+import logging
 
 class DataPlotter:
+
+    def __init__(self, logger=None):
+        """
+        Initialisiert den DataPlotter mit optionalem Logger.
+        Args:logger: Logger-Instanz für Protokollierung (optional)
+        """
+        self.logger = logger or logging.getLogger('SFPO_Analyzer')
+
     @staticmethod
     def setup_plot_style():
         """Konfiguriert den grundlegenden Plot-Stil"""
@@ -14,42 +26,56 @@ class DataPlotter:
         plt.rcParams['ytick.major.width'] = 3
 
     @staticmethod
+    @staticmethod
     def save_plots_for_series(analyzers_dict: dict, plots_folder: Path):
         """Erstellt und speichert Plots für alle Messreihen."""
+        # Prüfe, ob das Verzeichnis existiert, wenn nicht, erstelle es
+        plots_folder.mkdir(exist_ok=True, parents=True)
+
         # Verwende Plasma-Farbschema
         colors = plt.cm.plasma(np.linspace(0, 1, 10))  # 10 Farben aus dem Plasma-Schema
-        
+
         DataPlotter.setup_plot_style()  # Setze Grundstil
-        
+
         for name, analyzer in analyzers_dict.items():
+            # Überprüfe, ob Messdaten vorhanden sind
+            if not analyzer.measurements_data:
+                print(f"Keine Messdaten für {name} vorhanden, überspringe Plot-Erstellung.")
+                continue
+
             plt.figure(figsize=(10, 8))
-            
+
             # Plot jede Messung mit einer Farbe aus dem Plasma-Schema
             for i, (measurement, color) in enumerate(zip(analyzer.measurements_data, colors)):
-                distances, forces = zip(*measurement)
-                plt.plot(distances, forces, color=color, label=f'Messung {i + 1}')
-                
+                if measurement:  # Prüfe, ob die Messung Daten enthält
+                    distances, forces = zip(*measurement)
+                    plt.plot(distances, forces, color=color, label=f'Messung {i + 1}')
+
             # Achsenlimits und Ticks setzen
             plt.xlim(0, 1000)
             plt.ylim(0, 0.3)
-            plt.xticks(np.arange(0, 1001, 200),fontsize=22, fontweight='bold')
-            plt.yticks(np.arange(0, 0.31, 0.05),fontsize=22, fontweight='bold')
-            
+            plt.xticks(np.arange(0, 1001, 200), fontsize=22, fontweight='bold')
+            plt.yticks(np.arange(0, 0.31, 0.05), fontsize=22, fontweight='bold')
+
             # Beschriftungen
-            # plt.title(name, fontsize=24, fontweight='bold')
             plt.xlabel('Displacement [µm]', fontsize=24, fontweight='bold')
             plt.ylabel('Force [N]', fontsize=24, fontweight='bold')
             # Ersetze Unterstriche im Titel durch Leerzeichen
             title = name.replace('_', ' ')
-            # plt.title(title)
-            
-            # plt.legend()
+
             plt.grid(True)
-            
-            # Speichere Plot
+
+            # Erstelle den vollständigen Pfad für die Plotdatei
             plot_path = plots_folder / f"{name}_plot.png"
-            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            plt.close()
+
+            # Speichere Plot mit expliziter Fehlerbehandlung
+            try:
+                plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+                print(f"Plot erfolgreich gespeichert: {plot_path}")
+            except Exception as e:
+                print(f"Fehler beim Speichern des Plots {name}: {str(e)}")
+            finally:
+                plt.close()  # Wichtig: Figure schließen, um Speicherlecks zu vermeiden
 
     @staticmethod
     def create_work_interval_plots(analyzers_dict: dict, plots_folder: Path):
@@ -120,7 +146,7 @@ class DataPlotter:
             plt.gca().spines['top'].set_visible(False)
             
             # Füge eine Legende hinzu
-            plt.legend(fontsize=16, loc='upper right')
+            #plt.legend(fontsize=16, loc='upper right')
             
             # Speichere Plot
             plt.tight_layout()  # Optimiere Layout
@@ -135,7 +161,7 @@ class DataPlotter:
             # F_max Boxplot für diese Messreihe
             plt.figure(figsize=(10, 7))
             plt.boxplot([analyzer.max_forces_data], labels=[name])
-            plt.title(f'Maximalkräfte - {name}', fontsize=24, fontweight='bold')
+            #plt.title(f'Maximalkräfte - {name}', fontsize=24, fontweight='bold')
             plt.ylabel('F_max [N]', fontsize=24, fontweight='bold')
             plt.xlabel('Probe', fontsize=24, fontweight='bold')
             plt.xticks(fontsize=22, fontweight='bold')
@@ -150,7 +176,7 @@ class DataPlotter:
             # Arbeits-Boxplot für diese Messreihe
             plt.figure(figsize=(10, 10))
             plt.boxplot([analyzer.works], labels=[name])
-            plt.title(f'Verrichtete Arbeit - {name}', fontsize=24, fontweight='bold')
+            #plt.title(f'Verrichtete Arbeit - {name}', fontsize=24, fontweight='bold')
             plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
             plt.xlabel('Probe', fontsize=24, fontweight='bold')
             plt.xticks(fontsize=22, fontweight='bold')
@@ -188,7 +214,7 @@ class DataPlotter:
                          marker='o')  # Marker für bessere Sichtbarkeit der Messpunkte
             
             # Beschriftungen und Formatierung
-            plt.title(f'Normierte Arbeit - {name}', fontsize=24, fontweight='bold')
+            #plt.title(f'Normierte Arbeit - {name}', fontsize=24, fontweight='bold')
             plt.xlabel('Relative Position [%]', fontsize=24, fontweight='bold')
             plt.ylabel('Normierte Arbeit pro Intervall', fontsize=24, fontweight='bold')
             
@@ -197,7 +223,7 @@ class DataPlotter:
             plt.yticks(fontsize=22, fontweight='bold')
             
             plt.grid(True, linestyle='--', alpha=0.7)
-            plt.legend(fontsize=16)
+            #plt.legend(fontsize=16)
             
             # Speichere Plot
             plot_path = plots_folder / f"normalized_work_{name}.png"
@@ -241,7 +267,7 @@ class DataPlotter:
                          label='Mittelwert mit Standardabweichung')
             
             # Beschriftungen und Formatierung
-            plt.title(f'Mittlere normierte Arbeit - {name}', fontsize=24, fontweight='bold')
+            #plt.title(f'Mittlere normierte Arbeit - {name}', fontsize=24, fontweight='bold')
             plt.xlabel('Relative Position [%]', fontsize=24, fontweight='bold')
             plt.ylabel('Normierte Arbeit pro Intervall', fontsize=24, fontweight='bold')
             
@@ -250,7 +276,7 @@ class DataPlotter:
             plt.yticks(fontsize=22, fontweight='bold')
             
             plt.grid(True, linestyle='--', alpha=0.7)
-            plt.legend(fontsize=16)
+            #plt.legend(fontsize=16)
             
             # Speichere Plot
             plot_path = plots_folder / f"mean_normalized_work_{name}.png"
@@ -389,70 +415,3 @@ class DataPlotter:
 
         except Exception as e:
             print(f"Fehler beim Erstellen der Z-Score Plots: {str(e)}")
-
-
-'''    @staticmethod
-    def create_mean_plots(analyzers_dict: dict, plots_folder: Path):
-        """
-        Erstellt Plots für die Mittelwerte der normierten Arbeit mit Fehlerbalken
-        für die berechneten Standardabweichungen.
-
-        Diese Methode erzeugt für jede Messreihe einen Plot, der die durchschnittliche
-        normierte kumulative Arbeit als Linie darstellt. Die Standardabweichungen
-        werden als vertikale Fehlerbalken dargestellt.
-
-        Args:
-            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
-            plots_folder: Ordner zum Speichern der Plots
-        """
-        for name, analyzer in analyzers_dict.items():
-            plt.figure(figsize=(10, 8))
-
-            # Erstelle x-Achse in 10%-Schritten von 10% bis 100%
-            x_points = np.array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
-
-            # Berechne kumulative Mittelwerte und Standardabweichungen
-            means = []
-            stds = []
-            for i in range(len(x_points)):
-                # Sammle kumulative Summen bis zu dieser Position
-                cumulative_sums = []
-                for measurement in analyzer.normed_intervals:
-                    cum_sum = sum(measurement[:i + 1])
-                    cumulative_sums.append(cum_sum)
-
-                means.append(np.mean(cumulative_sums))
-                stds.append(np.std(cumulative_sums))
-
-            means = np.array(means)
-            stds = np.array(stds)
-
-            # Plotte Mittelwertlinie mit Fehlerbalken
-            plt.errorbar(x_points, means,
-                         yerr=stds,  # Vertikale Fehlerbalken
-                         fmt='b-',  # Blaue durchgezogene Linie
-                         linewidth=2,  # Dicke der Hauptlinie
-                         ecolor='red',  # Farbe der Fehlerbalken
-                         elinewidth=1,  # Dicke der Fehlerbalken
-                         capsize=5,  # Größe der Endkappen
-                         capthick=1,  # Dicke der Endkappen
-                         label='Mittelwert mit Standardabweichung')
-
-            # Beschriftungen und Formatierung
-            # plt.title(f'Normierte kumulative Arbeit - {name}',
-            #         fontsize=24, fontweight='bold')
-            plt.xlabel('Relative Position [%]', fontsize=24, fontweight='bold')
-            plt.ylabel('Normierte kumulative Arbeit', fontsize=24, fontweight='bold')
-            plt.xticks(x_points, fontsize=22, fontweight='bold')
-            plt.yticks(fontsize=22, fontweight='bold')
-            plt.grid(True, linestyle='--', alpha=0.7)  # Gestrichelte Gitterlinien
-            # plt.legend(fontsize=16)
-
-            # Achsenlimits setzen
-            plt.xlim(0, 105)  # Etwas Platz am Rand
-            plt.ylim(0, 1.2)  # Maximalwert sollte bei 1.0 liegen
-
-            # Speichere Plot
-            plot_path = plots_folder / f"mean_normalized_work_{name}.png"
-            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            plt.close()'''

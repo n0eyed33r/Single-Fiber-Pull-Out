@@ -1,6 +1,10 @@
+"""
+this code was made with the help of chatgpt, claude, gemini, stackoverflow .... u name it
+"""
 # src/utils/debug_printer.py
 import logging
 from src.config.settings import naming_storage, sort_storage
+from src.main import app_config
 
 
 class DebugPrinter:
@@ -32,3 +36,15 @@ class DebugPrinter:
         self.logger.debug(f"Dateien Erfolg: {sort_storage.good_ones}")
         self.logger.debug("Fehlgeschlagene Messungen Details:")
         self.logger.debug(f"Dateien Abbruch: {sort_storage.bad_ones}")
+
+    def print_plot_config(self):
+        """Gibt die aktuellen Plot-Konfigurationseinstellungen aus."""
+        self.logger = logging.getLogger('SFPO_Analyzer')
+        self.logger.info("=== Plot-Konfigurationseinstellungen ===")
+        self.logger.info(f"Standard-Plots: {app_config.analysis.create_standard_plots}")
+        self.logger.info(f"Boxplots: {app_config.analysis.create_boxplots}")
+        self.logger.info(f"Arbeitsintervall-Plots: {app_config.analysis.create_work_interval_plots}")
+        self.logger.info(f"Normierte Arbeits-Plots: {app_config.analysis.create_normalized_plots}")
+        self.logger.info(f"Violin-Plots: {app_config.analysis.create_violin_plots}")
+        self.logger.info(f"Z-Score-Plots: {app_config.analysis.create_zscore_plots}")
+        self.logger.info("=====================================")

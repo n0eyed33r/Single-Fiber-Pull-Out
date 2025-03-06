@@ -1,3 +1,6 @@
+"""
+this code was made with the help of chatgpt, claude, gemini, stackoverflow .... u name it
+"""
 # src/utils/logger_setup.py
 import logging
 import sys
