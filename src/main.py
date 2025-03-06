@@ -1,8 +1,11 @@
 """
 SFPO-Analyzer: Hauptanwendungsmodul für den Single-Fiber-Pull-Out Test Analyzer
+mit erweiterter statistischer Analyse (Bootstrap und ANOVA)
 """
 
 import sys
+import os
+import logging
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -21,6 +24,7 @@ from src.core.data_sorter import DataSorter
 from src.core.data_statistics import MeasurementAnalyzer
 from src.core.excel_exporter import ExcelExporter
 from src.core.data_plotting import DataPlotter
+from src.core.statistical_analysis import StatisticalAnalyzer  # Neues Statistikmodul
 from src.config.config_manager import app_config
 
 
@@ -38,7 +42,7 @@ def select_output_folder():
     root.focus_force()
 
     folder_path = filedialog.askdirectory(
-        title="Ordner für alle Ausgaben (Excel und Plots) auswählen"
+        title="Ordner für alle Ausgaben (Excel, Plots und Statistik) auswählen"
     )
 
     root.destroy()
@@ -65,6 +69,7 @@ def main():
     data_sorter = DataSorter(logger)
     data_plotter = DataPlotter(logger)
     excel_exporter = ExcelExporter(logger)
+    stat_analyzer = StatisticalAnalyzer(logger)  # Neue Statistikkomponente
 
     try:
         # 1. Analysemodus auswählen (Einzelne Messreihe oder mehrere)
@@ -117,7 +122,7 @@ def main():
                 if analyzer:
                     analyzer_dict[folder.name] = analyzer
 
-        # 3. Wenn Analyzer vorhanden sind, erstelle Plots und exportiere Excel
+        # 3. Wenn Analyzer vorhanden sind, erstelle Plots, führe Statistikanalysen durch und exportiere Excel
         if analyzer_dict:
             # Lasse den Benutzer einen Ausgabeordner wählen
             output_folder = select_output_folder()
@@ -169,7 +174,11 @@ def main():
                 logger.info("Erstelle Z-Score-Plots...")
                 DataPlotter.create_z_score_plots(analyzer_dict, zscore_folder)
 
-            # Excel-Export mit vorausgewähltem Speicherort
+            # Führe erweiterte statistische Analysen durch
+            logger.info("Führe erweiterte statistische Analysen durch...")
+            stat_results = stat_analyzer.compare_groups(analyzer_dict, output_folder)
+
+            # Excel-Export
             if app_config.analysis.export_to_excel:
                 logger.info("Exportiere Daten nach Excel...")
 
@@ -187,7 +196,7 @@ def main():
                 # Angepasste Funktion für Excel-Speicherung mit vorgegebenem Pfad
                 def save_excel_with_predefined_path(save_method, file_path):
                     # Wir müssen monkeypatchen, um den Speicherdialog zu umgehen
-                    original_method = excel_exporter.save_to_excel
+                    original_method = filedialog.asksaveasfilename
 
                     # Temporäre Ersatzmethode, die immer den vordefinierten Pfad zurückgibt
                     def temp_filedialog_method(*args, **kwargs):
