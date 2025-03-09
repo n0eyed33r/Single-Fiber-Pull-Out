@@ -4,7 +4,7 @@ this code was made with the help of chatgpt, claude, gemini, stackoverflow .... 
 # src/utils/debug_printer.py
 import logging
 from src.config.settings import naming_storage, sort_storage
-from src.main import app_config
+from src.config.config_manager import app_config
 
 
 class DebugPrinter:

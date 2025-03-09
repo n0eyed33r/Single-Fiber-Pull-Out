@@ -9,7 +9,7 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog
 from src.core.data_statistics import MeasurementAnalyzer
-from typing import Optional, Dict, List, Any, Union
+from typing import Optional
 import logging
 import os
 
