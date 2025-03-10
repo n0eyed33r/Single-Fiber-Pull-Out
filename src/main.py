@@ -1,695 +1,318 @@
-"""
-Hauptmodul der SFPO-Analyzer Anwendung zur Steuerung des Analyseprozesses
-und Koordination der verschiedenen Komponenten.
-"""
-
-import sys
-from pathlib import Path
-from tkinter import messagebox
-from typing import Dict, Optional
-import numpy as np
-
-# Eigene Module importieren
-from src.config.config_manager import app_config
+# src/main.py
+from src.core.data_statistics import MeasurementAnalyzer
 from src.core.file_handler import FileHandler
 from src.core.data_sorter import DataSorter
-from src.core.data_statistics import MeasurementAnalyzer
+from src.utils.debug_printer import DebugPrinter
+from src.utils.logger_setup import LoggerSetup
 from src.core.data_plotting import DataPlotter
 from src.core.excel_exporter import ExcelExporter
-from src.utils.logger_setup import LoggerSetup
-from src.utils.debug_printer import DebugPrinter
+from src.config.settings import naming_storage
+from pathlib import Path
+from dataclasses import dataclass
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import Optional
 
 
-class SFPOAnalyzer:
+@dataclass
+class AnalysisConfig:
+    """Konfigurationsklasse für die Steuerung der Analyseschritte"""
+    # Berechnungen
+    calculate_zscores: bool = True
+    calculate_force_moduli: bool = True
+    calculate_work_intervals: bool = True
+    perform_anova_analysis: bool = True  # Neue Option für ANOVA-Analyse
+    
+    # Plot-Erstellung
+    create_standard_plots: bool = True  # Kraft-Weg-Diagramme
+    create_boxplots: bool = True  # Boxplots für F_max und Arbeit
+    create_work_interval_plots: bool = True
+    create_normalized_plots: bool = True  # Normierte Arbeitsplots
+    create_violin_plots: bool = True  # Violin-Plots
+    create_zscore_plots: bool = True  # Z-Score-Plots
+    
+    # Export
+    export_to_excel: bool = True
+    export_anova_results: bool = True  # Neue Option für ANOVA-Export
+
+
+def process_single_series(
+        logger,
+        debug_printer,
+        folder_path: Optional[Path] = None,
+        config: Optional[AnalysisConfig] = None
+) -> Optional[MeasurementAnalyzer]:
+    """Verarbeitet eine einzelne Messreihe mit konfigurierbaren Analyseschritten
+
+    Args:
+        logger: Logger-Instanz
+        debug_printer: Debug-Printer-Instanz
+        folder_path: Wenn gegeben, wird dieser Pfad verwendet, sonst wird nach Auswahl gefragt
+        config: Konfigurationsobjekt zur Steuerung der Analyseschritte
     """
-    Hauptklasse der Anwendung, die den gesamten Analyse-Workflow steuert.
-    """
+    # Standardkonfiguration wenn keine angegeben
+    if config is None:
+        config = AnalysisConfig()
     
-    def __init__(self):
-        """Initialisiert die Anwendung und richtet den Logger ein."""
-        # Logger einrichten
-        self.logger = LoggerSetup.setup_logger()
-        self.logger.info("=== SFPO-Analyzer gestartet ===")
-        
-        # Komponenten initialisieren
-        self.file_handler = FileHandler(self.logger)
-        self.data_sorter = DataSorter(self.logger)
-        self.data_plotter = DataPlotter(self.logger)
-        self.excel_exporter = ExcelExporter(self.logger)
-        self.debug_printer = DebugPrinter()
-        
-        # Speicher für Analyzer-Objekte
-        self.analyzers: Dict[str, MeasurementAnalyzer] = {}
-        
-        # Statistische Analyse
-        self.statistical_analyzer = None
-        
-        # Analysekonfiguration
-        self.use_bootstrap = False
-        self.anova_groups = {}
-    
-    def run(self):
-        """Führt den Hauptablauf der Anwendung aus."""
-        try:
-            # Analysetyp wählen
-            analysis_type = self.file_handler.select_analysis_type()
-            
-            # Welche Analysen sollen durchgeführt werden
-            analysis_options = self.file_handler.select_analysis_types()
-            
-            # Update der Analysekonfiguration
-            for key, value in analysis_options.items():
-                setattr(app_config.analysis, key, value)
-            
-            # Bootstrap-Option abfragen
-            self.use_bootstrap = self.file_handler.select_bootstrap_option()
-            
-            if analysis_type == "1":
-                # Einzelne Messreihe analysieren
-                self.analyze_single_series()
-            elif analysis_type == "2":
-                # Alle Messreihen im Ordner analysieren
-                self.analyze_all_series()
-                
-                # ANOVA-Gruppenanalyse, wenn mehr als eine Messreihe vorhanden ist
-                if len(self.analyzers) > 1:
-                    self.perform_group_analysis()
-            else:
-                self.logger.error(f"Ungültiger Analysetyp: {analysis_type}")
-                return
-            
-            # Export durchführen
-            if app_config.analysis.export_to_excel:
-                self.export_results()
-            
-            self.logger.info("=== Analyse abgeschlossen ===")
-        
-        except Exception as e:
-            self.logger.error(f"Fehler in der Hauptanwendung: {e}", exc_info=True)
-            messagebox.showerror("Fehler", f"Ein Fehler ist aufgetreten: {str(e)}")
-        finally:
-            # Abschließende Meldung
-            self.logger.info("SFPO-Analyzer wird beendet.")
-    
-    def analyze_single_series(self):
-        """Analysiert eine einzelne Messreihe."""
-        # Ordner auswählen
-        folder_path = self.file_handler.select_folder("1")
-        if not folder_path:
-            self.logger.info("Ordnerauswahl abgebrochen")
-            return
+    try:
+        # Ordnerauswahl oder Pfadübernahme
+        if folder_path is None:
+            selected_path = FileHandler.select_folder(analysis_type='1')
+            if not selected_path:
+                logger.warning("No folder selected - program terminated")
+                return None
+        else:
+            selected_path = folder_path
+            naming_storage.update_paths(selected_path)
         
         # Dateien finden und sortieren
-        self.file_handler.find_specimen_files()
-        successful, failed = self.data_sorter.analyze_filenames()
-        
-        # Pull-Out Verhältnis berechnen
-        ratio = self.data_sorter.calculate_pullout_ratio()
-        self.logger.info(f"Pull-Out Verhältnis: {ratio:.2f}")
-        
-        # Analyzer erstellen und Messungen lesen
-        analyzer = self.create_analyzer(folder_path.name)
-        if not analyzer:
-            return
-        
-        # Speichern des Analyzers im Dictionary (wichtig für Bootstrap-Analyse)
-        self.analyzers[folder_path.name] = analyzer
-        
-        # Ausgabeordner erstellen
-        self.create_output_folders(folder_path)
-        
-        # Plots erstellen basierend auf Konfiguration
-        self.create_plots(folder_path)
-        
-        # Bootstrap-Analyse, wenn gewünscht
-        if self.use_bootstrap:
-            self.perform_bootstrap_analysis(folder_path)
-    
-    def analyze_all_series(self):
-        """Analysiert alle Messreihen in einem übergeordneten Ordner."""
-        # Übergeordneten Ordner auswählen
-        parent_folder = self.file_handler.select_folder("2")
-        if not parent_folder:
-            self.logger.info("Ordnerauswahl abgebrochen")
-            return
-        
-        # Messreihenordner finden
-        series_folders = self.file_handler.get_measurement_series_folders(parent_folder)
-        if not series_folders:
-            self.logger.warning("Keine Messreihen gefunden")
-            return
-        
-        # Ausgabeordner erstellen
-        plots_folder, boxplots_folder, violin_folder, zscore_folder = self.create_output_folders(parent_folder)
-        
-        # Jede Messreihe analysieren
-        for folder in series_folders:
-            try:
-                self.logger.info(f"\n=== Analysiere Messreihe: {folder.name} ===")
-                
-                # Konfiguration zurücksetzen
-                app_config.reset_for_new_series()
-                app_config.paths.update_paths(folder)
-                
-                # Dateien finden und sortieren
-                self.file_handler.find_specimen_files()
-                successful, failed = self.data_sorter.analyze_filenames()
-                
-                # Pull-Out Verhältnis berechnen
-                ratio = self.data_sorter.calculate_pullout_ratio()
-                
-                # Analyzer erstellen und Messungen lesen
-                analyzer = self.create_analyzer(folder.name)
-                if analyzer:
-                    self.analyzers[folder.name] = analyzer
-            
-            except Exception as e:
-                self.logger.error(f"Fehler bei Messreihe {folder.name}: {e}", exc_info=True)
-        
-        # Plots für alle Messreihen erstellen
-        if self.analyzers:
-            self.create_plots_for_all_series(parent_folder)
-            
-            # Bootstrap-Analyse für alle Messreihen, wenn gewünscht
-            if self.use_bootstrap:
-                self.perform_bootstrap_analysis(parent_folder)
-        else:
-            self.logger.warning("Keine Analyzer erstellt, überspringe Plot-Erstellung")
-        
-        # Speichere die Ordner für die spätere ANOVA-Analyse
-        self.series_folders = series_folders
-    
-    def create_analyzer(self, name: str) -> Optional[MeasurementAnalyzer]:
-        """Erstellt und konfiguriert einen MeasurementAnalyzer für eine Messreihe."""
-        try:
-            analyzer = MeasurementAnalyzer(self.logger)
-            
-            # Messungen einlesen
-            analyzer.read_all_measurements()
-            if not analyzer.measurements_data:
-                self.logger.warning(f"Keine Messdaten für {name} gefunden")
-                return None
-            
-            # Maximalkräfte und Einbettlängen finden
-            analyzer.find_all_max_forces()
-            analyzer.find_all_embeddinglengths()
-            
-            # Faserdurchmesser verarbeiten
-            analyzer.process_all_fiberdiameters()
-            
-            # Konsistenzprüfung
-            if not analyzer.check_data_consistency():
-                self.logger.warning(f"Datenkonsistenz für {name} nicht erfüllt")
-            
-            # IFSS und Arbeit berechnen
-            analyzer.interfaceshearstrength()
-            analyzer.calculate_all_works()
-            
-            # Weitere Berechnungen basierend auf Konfiguration
-            if app_config.analysis.calculate_work_intervals:
-                analyzer.calculate_all_work_intervals()
-                analyzer.calculate_normed_intervals()
-                analyzer.calculate_interval_statistics()
-            
-            if app_config.analysis.calculate_force_moduli:
-                analyzer.calculate_force_modulus()
-            
-            return analyzer
-        
-        except Exception as e:
-            self.logger.error(f"Fehler beim Erstellen des Analyzers für {name}: {e}", exc_info=True)
+        found_files = FileHandler.find_specimen_files()
+        if not found_files:
+            logger.warning("Keine Messdateien im ausgewählten Ordner gefunden")
             return None
-    
-    def create_output_folders(self, base_folder: Path) -> tuple:
-        """Erstellt alle benötigten Ausgabeordner."""
-        return self.file_handler.ensure_output_folders(base_folder)
-    
-    def create_plots(self, base_folder: Path):
-        """Erstellt Plots basierend auf der Konfiguration."""
-        plots_folder, boxplots_folder, violin_folder, zscore_folder = self.create_output_folders(base_folder)
         
-        # Debug-Ausgabe der Plot-Konfiguration
-        self.debug_printer.print_plot_config()
+        debug_printer.print_file_handling_results()
+        DataSorter.analyze_filenames()
+        debug_printer.print_sorting_results()
         
-        # Standard Kraft-Weg-Diagramme
-        if app_config.analysis.create_standard_plots:
-            self.logger.info("Erstelle Standard Kraft-Weg-Diagramme...")
-            DataPlotter.save_plots_for_series(self.analyzers, plots_folder)
+        # Analyse durchführen
+        analyzer = MeasurementAnalyzer()
+        paths = analyzer.get_measurement_paths()
+        print(f"Gefundene Messpfade: {len(paths)}")
         
-        # Boxplots
-        if app_config.analysis.create_boxplots:
-            self.logger.info("Erstelle Boxplots...")
-            DataPlotter.create_boxplots(self.analyzers, boxplots_folder)
+        analyzer.read_all_measurements()
+        print(f"Eingelesene Messungen: {len(analyzer.measurements_data)}")
         
-        # Arbeitsintervall-Plots
-        if app_config.analysis.create_work_interval_plots:
-            self.logger.info("Erstelle Arbeitsintervall-Plots...")
-            DataPlotter.create_work_interval_plots(self.analyzers, plots_folder)
+        # Grundlegende Berechnungen
+        analyzer.process_all_fiberdiameters()
+        analyzer.check_data_consistency()
+        analyzer.find_all_max_forces()
+        analyzer.find_all_embeddinglengths()
+        analyzer.calculate_all_works()
+        analyzer.interfaceshearstrength()
         
-        # Normierte Plots
-        if app_config.analysis.create_normalized_plots:
-            self.logger.info("Erstelle normierte Arbeits-Plots...")
-            DataPlotter.create_normalized_plots(self.analyzers, plots_folder)
-            DataPlotter.create_mean_normalized_plots(self.analyzers, plots_folder)
-        
-        # Violin-Plots
-        if app_config.analysis.create_violin_plots:
-            self.logger.info("Erstelle Violin-Plots...")
-            DataPlotter.create_violin_plots(self.analyzers, violin_folder)
-        
-        # Z-Score Plots
-        if app_config.analysis.create_zscore_plots:
-            self.logger.info("Erstelle Z-Score Plots...")
-            DataPlotter.create_z_score_plots(self.analyzers, zscore_folder)
-    
-    def create_plots_for_all_series(self, base_folder: Path):
-        """Erstellt Plots für alle Messreihen zusammen."""
-        plots_folder, boxplots_folder, violin_folder, zscore_folder = self.create_output_folders(base_folder)
-        
-        # Debug-Ausgabe der Plot-Konfiguration
-        self.debug_printer.print_plot_config()
-        
-        # Plots erstellen basierend auf Konfiguration
-        if app_config.analysis.create_standard_plots:
-            self.logger.info("Erstelle Standard Kraft-Weg-Diagramme für alle Messreihen...")
-            DataPlotter.save_plots_for_series(self.analyzers, plots_folder)
-        
-        # Weitere Plot-Typen analog zu create_plots()
-        if app_config.analysis.create_boxplots:
-            DataPlotter.create_boxplots(self.analyzers, boxplots_folder)
-        
-        if app_config.analysis.create_work_interval_plots:
-            DataPlotter.create_work_interval_plots(self.analyzers, plots_folder)
-        
-        if app_config.analysis.create_normalized_plots:
-            DataPlotter.create_normalized_plots(self.analyzers, plots_folder)
-            DataPlotter.create_mean_normalized_plots(self.analyzers, plots_folder)
-        
-        if app_config.analysis.create_violin_plots:
-            DataPlotter.create_violin_plots(self.analyzers, violin_folder)
-        
-        if app_config.analysis.create_zscore_plots:
-            DataPlotter.create_z_score_plots(self.analyzers, zscore_folder)
-    
-    def export_results(self):
-        """Exportiert die Ergebnisse in Excel-Dateien."""
-        if not self.analyzers:
-            self.logger.warning("Keine Ergebnisse zum Exportieren vorhanden")
-            return
-        
-        # Excel-Exporter mit allen Ergebnissen befüllen
-        exporter = ExcelExporter(self.logger)
-        for name, analyzer in self.analyzers.items():
-            exporter.add_measurement_series(name, analyzer)
-        
-        # Hauptergebnisse speichern
-        main_file = exporter.save_to_excel()
-        if main_file:
-            self.logger.info(f"Hauptergebnisse gespeichert in: {main_file}")
-        
-        # Arbeitsintervalle speichern
-        if app_config.analysis.calculate_work_intervals:
-            intervals_file = exporter.save_work_intervals_to_excel()
-            if intervals_file:
-                self.logger.info(f"Arbeitsintervalle gespeichert in: {intervals_file}")
-        
-        # Boxplot-Daten speichern
-        if app_config.analysis.create_boxplots:
-            boxplot_file = exporter.save_boxplot_data_to_excel()
-            if boxplot_file:
-                self.logger.info(f"Boxplot-Daten gespeichert in: {boxplot_file}")
-    
-    def perform_group_analysis(self):
-        """
-        Führt eine automatische ANOVA-Analyse für Gruppen von Messreihen durch.
-        Die Gruppen werden automatisch basierend auf gemeinsamen Präfixen der Ordnernamen erstellt.
-        """
-        if not hasattr(self, 'series_folders') or not self.series_folders:
-            self.logger.warning("Keine Messreihen für Gruppenanalyse verfügbar")
-            return
-        
-        # Automatische Gruppierung der Messreihen nach Präfixen
-        self.anova_groups = self.file_handler.get_anova_groups(self.series_folders)
-        
-        if not self.anova_groups:
-            self.logger.info("Keine geeigneten Gruppen für ANOVA-Analyse gefunden")
-            return
-        
-        self.logger.info(f"ANOVA-Analyse wird für {len(self.anova_groups)} automatisch erkannte Gruppen durchgeführt")
-        
-        # Bestimme den übergeordneten Ordner für die Ausgabe
-        parent_folder = self.series_folders[0].parent
-        
-        # Führe ANOVA-Analyse durch
-        self.perform_anova_analysis(parent_folder)
-        
-        self.logger.info("Automatische ANOVA-Gruppenanalyse abgeschlossen")
-    
-    def perform_anova_analysis(self, output_folder: Path = None):
-        """
-        Führt eine ANOVA-Analyse für die automatisch gruppierten Messreihen durch.
+        # Statistische Auswertungen
+        print("\nStatistische Auswertung:")
+        print(f"Maximalkräfte: {analyzer.calculate_mean('forces'):.2f} ± {analyzer.calculate_stddev('forces'):.2f} N")
+        print(
+            f"Einbettlängen: {analyzer.calculate_mean('lengths'):.2f} ± {analyzer.calculate_stddev('lengths'):.2f} µm")
+        print(
+            f"Faserdurchmesser: {analyzer.calculate_mean('diameters'):.2f} ± {analyzer.calculate_stddev('diameters'):.2f} µm")
+        print(f"IFSS: {analyzer.calculate_mean('ifss'):.2f} ± {analyzer.calculate_stddev('ifss'):.2f} MPa")
+        print(f"Arbeit: {analyzer.calculate_mean('works'):.2f} ± {analyzer.calculate_stddev('works'):.2f} µJ")
 
-        Args:
-            output_folder: Der Ausgabeordner für die Ergebnisse.
-                          Wenn None, wird der übergeordnete Ordner der Messreihen verwendet.
-        """
-        if not self.anova_groups:
-            self.logger.warning("Keine Gruppen für ANOVA-Analyse definiert")
-            return
-        
-        if not self.analyzers:
-            self.logger.warning("Keine Daten für ANOVA-Analyse verfügbar")
-            return
-        
-        # Initialisiere den StatisticalAnalyzer, falls noch nicht geschehen
-        if not self.statistical_analyzer:
-            from src.core.statistical_analysis import StatisticalAnalyzer
-            self.statistical_analyzer = StatisticalAnalyzer(self.logger)
-        
-        # Bestimme den Ausgabeordner
-        if output_folder is None:
-            # Verwende den Standardpfad (gemeinsamer Elternordner der ersten Gruppe)
-            first_group_folders = next(iter(self.anova_groups.values()))
-            if not first_group_folders:
-                self.logger.warning("Leere Gruppe gefunden, ANOVA-Analyse wird übersprungen")
-                return
-            
-            parent_folder = first_group_folders[0].parent
-            stats_folder = parent_folder / "statistical_analysis"
-        else:
-            # Verwende den angegebenen Ausgabeordner
-            stats_folder = output_folder / "statistical_analysis"
-        
-        # Erstelle die Ausgabeordner
-        anova_folder = stats_folder / "anova"
-        for folder in [stats_folder, anova_folder]:
-            folder.mkdir(exist_ok=True, parents=True)
-        
-        self.logger.info(f"ANOVA-Ergebnisse werden in {stats_folder} gespeichert")
-        self.logger.info("Starte ANOVA-Analyse...")
-        
-        # Gruppiere die Daten nach den automatisch erkannten Gruppen
-        f_max_groups = {}
-        work_groups = {}
-        ifss_groups = {}
-        
-        for group_name, folders in self.anova_groups.items():
-            f_max_group_data = []
-            work_group_data = []
-            ifss_group_data = []
-            
-            for folder in folders:
-                folder_name = folder.name
-                
-                if folder_name in self.analyzers:
-                    analyzer = self.analyzers[folder_name]
-                    
-                    # F_max-Werte
-                    if hasattr(analyzer, 'max_forces_data') and analyzer.max_forces_data:
-                        f_max_group_data.extend(analyzer.max_forces_data)
-                    
-                    # Arbeitswerte
-                    if hasattr(analyzer, 'works') and analyzer.works:
-                        work_group_data.extend(analyzer.works)
-                    
-                    # IFSS-Werte
-                    if hasattr(analyzer, 'ifssvalues') and analyzer.ifssvalues:
-                        # Filtere ungültige Werte (z.B. 0)
-                        valid_ifss = [val for val in analyzer.ifssvalues if val > 0]
-                        if valid_ifss:
-                            ifss_group_data.extend(valid_ifss)
-            
-            # Nur hinzufügen, wenn Daten vorhanden sind
-            if f_max_group_data:
-                f_max_groups[group_name] = np.array(f_max_group_data)
-            
-            if work_group_data:
-                work_groups[group_name] = np.array(work_group_data)
-            
-            if ifss_group_data:
-                ifss_groups[group_name] = np.array(ifss_group_data)
-        
-        # Führe ANOVA-Analysen durch
-        results = {}
-        anova_target_size = 10  # Target-Größe für Bootstrap-ANOVA
-        
-        # F_max ANOVA
-        if len(f_max_groups) >= 2:
-            self.logger.info("Führe ANOVA für Maximalkräfte durch...")
-            results['F_max'] = self.statistical_analyzer.perform_anova(
-                f_max_groups, anova_target_size, anova_folder, "F_max [N]")
-        
-        # Arbeit ANOVA
-        if len(work_groups) >= 2:
-            self.logger.info("Führe ANOVA für Arbeitswerte durch...")
-            results['Arbeit'] = self.statistical_analyzer.perform_anova(
-                work_groups, anova_target_size, anova_folder, "Arbeit [µJ]")
-        
-        # IFSS ANOVA
-        if len(ifss_groups) >= 2:
-            self.logger.info("Führe ANOVA für IFSS-Werte durch...")
-            results['IFSS'] = self.statistical_analyzer.perform_anova(
-                ifss_groups, anova_target_size, anova_folder, "IFSS [MPa]")
-        
-        # Erstelle einen Zusammenfassungsbericht
-        self.statistical_analyzer.create_summary_report(
-            {'bootstrap': {}, 'anova': results}, stats_folder)
-        
-        self.logger.info(f"ANOVA-Analyse abgeschlossen. Ergebnisse gespeichert in: {stats_folder}")
-    
-    def run(self):
-        """Führt den Hauptablauf der Anwendung aus."""
-        try:
-            # Analysetyp wählen
-            analysis_type = self.file_handler.select_analysis_type()
-            
-            # Welche Analysen sollen durchgeführt werden
-            analysis_options = self.file_handler.select_analysis_types()
-            
-            # Update der Analysekonfiguration
-            for key, value in analysis_options.items():
-                if hasattr(app_config.analysis, key):
-                    setattr(app_config.analysis, key, value)
-            
-            # Speichere die ANOVA-Option separat
-            do_anova_analysis = analysis_options.get('do_anova_analysis', False)
-            
-            # Bootstrap-Option abfragen
-            self.use_bootstrap = self.file_handler.select_bootstrap_option()
-            
-            if analysis_type == "1":
-                # Einzelne Messreihe analysieren
-                self.analyze_single_series()
-            elif analysis_type == "2":
-                # Alle Messreihen im Ordner analysieren
-                self.analyze_all_series()
-                
-                # ANOVA-Gruppenanalyse, wenn mehr als eine Messreihe vorhanden ist und ANOVA gewählt wurde
-                if len(self.analyzers) > 1 and do_anova_analysis:
-                    self.perform_group_analysis()
-            else:
-                self.logger.error(f"Ungültiger Analysetyp: {analysis_type}")
-                return
-            
-            # Export durchführen
-            if app_config.analysis.export_to_excel:
-                self.export_results()
-            
-            self.logger.info("=== Analyse abgeschlossen ===")
-        
-        except Exception as e:
-            self.logger.error(f"Fehler in der Hauptanwendung: {e}", exc_info=True)
-            messagebox.showerror("Fehler", f"Ein Fehler ist aufgetreten: {str(e)}")
-        finally:
-            # Abschließende Meldung
-            self.logger.info("SFPO-Analyzer wird beendet.")
-    
-    def perform_bootstrap_analysis(self, base_folder: Path):
-        """
-        Führt eine Bootstrap-Analyse für die vorhandenen Messreihen durch.
-        
-        Args:
-            base_folder: Der Basisordner für die Ausgabe der Ergebnisse
-        """
-        if not self.analyzers:
-            self.logger.warning("Keine Daten für Bootstrap-Analyse verfügbar")
-            return
-        
-        # Initialisiere den StatisticalAnalyzer
-        from src.core.statistical_analysis import StatisticalAnalyzer
-        self.statistical_analyzer = StatisticalAnalyzer(self.logger)
-        
-        # Erstelle den Ausgabeordner für statistische Analysen
-        stats_folder = base_folder / "statistical_analysis"
-        bootstrap_folder = stats_folder / "bootstrap"
-        
-        for folder in [stats_folder, bootstrap_folder]:
-            folder.mkdir(exist_ok=True, parents=True)
-        
-        self.logger.info("Starte Bootstrap-Analyse...")
-        
-        # Extrahiere Daten für verschiedene Messgrößen
-        f_max_data = {}
-        work_data = {}
-        ifss_data = {}
-        
-        for name, analyzer in self.analyzers.items():
-            # Extrahiere F_max-Werte
-            if hasattr(analyzer, 'max_forces_data') and analyzer.max_forces_data:
-                f_max_data[name] = np.array(analyzer.max_forces_data)
-            
-            # Extrahiere Arbeitswerte
-            if hasattr(analyzer, 'works') and analyzer.works:
-                work_data[name] = np.array(analyzer.works)
-            
-            # Extrahiere IFSS-Werte
-            if hasattr(analyzer, 'ifssvalues') and analyzer.ifssvalues:
-                # Filtere ungültige Werte (z.B. 0)
-                valid_ifss = [val for val in analyzer.ifssvalues if val > 0]
-                if valid_ifss:
-                    ifss_data[name] = np.array(valid_ifss)
-        
-        # Führe Bootstrap-Analysen durch
-        results = {}
-        
-        # F_max Bootstrap
-        if f_max_data:
-            self.logger.info("Führe Bootstrap für Maximalkräfte durch...")
-            results['F_max'] = self.statistical_analyzer.perform_bootstrap_analysis(
-                f_max_data, bootstrap_folder)
-        
-        # Arbeit Bootstrap
-        if work_data:
-            self.logger.info("Führe Bootstrap für Arbeitswerte durch...")
-            results['Arbeit'] = self.statistical_analyzer.perform_bootstrap_analysis(
-                work_data, bootstrap_folder)
-        
-        # IFSS Bootstrap
-        if ifss_data:
-            self.logger.info("Führe Bootstrap für IFSS-Werte durch...")
-            results['IFSS'] = self.statistical_analyzer.perform_bootstrap_analysis(
-                ifss_data, bootstrap_folder)
-        
-        self.logger.info("Bootstrap-Analyse abgeschlossen")
-    
-    def perform_anova_analysis(self):
-        """
-        Führt eine ANOVA-Analyse für die ausgewählten Gruppen durch.
-        """
-        if not self.anova_groups:
-            self.logger.warning("Keine Gruppen für ANOVA-Analyse definiert")
-            return
-        
-        if not self.analyzers:
-            self.logger.warning("Keine Daten für ANOVA-Analyse verfügbar")
-            return
-        
-        # Initialisiere den StatisticalAnalyzer, falls noch nicht geschehen
-        if not self.statistical_analyzer:
-            from src.core.statistical_analysis import StatisticalAnalyzer
-            self.statistical_analyzer = StatisticalAnalyzer(self.logger)
-        
-        # Bestimme den übergeordneten Ordner (gemeinsamer Elternordner der ersten Gruppe)
-        first_group_folders = next(iter(self.anova_groups.values()))
-        if not first_group_folders:
-            self.logger.warning("Leere Gruppe gefunden, ANOVA-Analyse wird übersprungen")
-            return
-        
-        parent_folder = first_group_folders[0].parent
-        
-        # Erstelle den Ausgabeordner für ANOVA-Analysen
-        stats_folder = parent_folder / "statistical_analysis"
-        anova_folder = stats_folder / "anova"
-        
-        for folder in [stats_folder, anova_folder]:
-            folder.mkdir(exist_ok=True, parents=True)
-        
-        self.logger.info("Starte ANOVA-Analyse...")
-        
-        # Gruppiere die Daten nach den ausgewählten Gruppen
-        f_max_groups = {}
-        work_groups = {}
-        ifss_groups = {}
-        
-        for group_name, folders in self.anova_groups.items():
-            f_max_group_data = []
-            work_group_data = []
-            ifss_group_data = []
-            
-            for folder in folders:
-                folder_name = folder.name
-                
-                if folder_name in self.analyzers:
-                    analyzer = self.analyzers[folder_name]
-                    
-                    # F_max-Werte
-                    if hasattr(analyzer, 'max_forces_data') and analyzer.max_forces_data:
-                        f_max_group_data.extend(analyzer.max_forces_data)
-                    
-                    # Arbeitswerte
-                    if hasattr(analyzer, 'works') and analyzer.works:
-                        work_group_data.extend(analyzer.works)
-                    
-                    # IFSS-Werte
-                    if hasattr(analyzer, 'ifssvalues') and analyzer.ifssvalues:
-                        # Filtere ungültige Werte (z.B. 0)
-                        valid_ifss = [val for val in analyzer.ifssvalues if val > 0]
-                        if valid_ifss:
-                            ifss_group_data.extend(valid_ifss)
-            
-            # Nur hinzufügen, wenn Daten vorhanden sind
-            if f_max_group_data:
-                f_max_groups[group_name] = np.array(f_max_group_data)
-            
-            if work_group_data:
-                work_groups[group_name] = np.array(work_group_data)
-            
-            if ifss_group_data:
-                ifss_groups[group_name] = np.array(ifss_group_data)
-        
-        # Führe ANOVA-Analysen durch
-        results = {}
-        anova_target_size = 10  # Target-Größe für Bootstrap-ANOVA
-        
-        # F_max ANOVA
-        if len(f_max_groups) >= 2:
-            self.logger.info("Führe ANOVA für Maximalkräfte durch...")
-            results['F_max'] = self.statistical_analyzer.perform_anova(
-                f_max_groups, anova_target_size, anova_folder, "F_max [N]")
-        
-        # Arbeit ANOVA
-        if len(work_groups) >= 2:
-            self.logger.info("Führe ANOVA für Arbeitswerte durch...")
-            results['Arbeit'] = self.statistical_analyzer.perform_anova(
-                work_groups, anova_target_size, anova_folder, "Arbeit [µJ]")
-        
-        # IFSS ANOVA
-        if len(ifss_groups) >= 2:
-            self.logger.info("Führe ANOVA für IFSS-Werte durch...")
-            results['IFSS'] = self.statistical_analyzer.perform_anova(
-                ifss_groups, anova_target_size, anova_folder, "IFSS [MPa]")
-        
-        # Erstelle einen Zusammenfassungsbericht
-        self.statistical_analyzer.create_summary_report(
-            {'bootstrap': {}, 'anova': results}, stats_folder)
-        
-        self.logger.info("ANOVA-Analyse abgeschlossen")
+        # Optionale Berechnungen basierend auf Konfiguration
+        if config.calculate_force_moduli:
+            analyzer.calculate_force_modulus()
+            print(f"Verbundmodul: {analyzer.calculate_mean('force_modulus'):.3f} ± "
+                  f"{analyzer.calculate_stddev('force_modulus'):.3f} N/µm")
 
+        # In der main.py, wo die anderen statistischen Ausgaben sind
+        if config.calculate_work_intervals:
+            print("\nKumulative normierte Arbeit:")
+            stats = analyzer.get_cumulative_normed_work_statistics()
+            print("Position | Mittelwert ± Standardabweichung")
+            print("-" * 45)
+            for position in sorted(stats.keys(), key=lambda x: float(x.strip('%'))):
+                mean = stats[position]["mean"]
+                std = stats[position]["std"]
+                print(f"{position:8} | {mean:.4f} ± {std:.4f}")
 
-# Einstiegspunkt der Anwendung
-def main():
-    """Hauptfunktion zum Starten der Anwendung."""
-    try:
-        app = SFPOAnalyzer()
-        app.run()
+        # Optionale Arbeitsberechnungen
+        if config.calculate_work_intervals:
+            analyzer.calculate_all_work_intervals()
+            print("\nArbeitsintervalle:")
+            for i, intervals in enumerate(analyzer.work_intervals, 1):
+                print(f"Messung {i}: {intervals}")
+            
+            analyzer.calculate_normed_intervals()
+            analyzer.calculate_interval_statistics()
+            
+            print("\nStatistik der normierten Intervalle:")
+            for i in range(10):
+                print(f"Intervall {i + 1}: "
+                      f"{analyzer.mean_normed_intervals[i]:.3f} ± "
+                      f"{analyzer.stddev_normed_intervals[i]:.3f} "
+                      f"(rel. Stdabw: {analyzer.rel_stddev_normed_intervals[i]:.1%})")
+        
+        return analyzer
+    
+    except ValueError as e:
+        logger.error(f"Fehler bei der Analyse: {e}")
+        return None
     except Exception as e:
-        print(f"Kritischer Fehler in der Anwendung: {e}")
-        if hasattr(e, "__traceback__"):
-            import traceback
-            traceback.print_tb(e.__traceback__)
-        sys.exit(1)
+        logger.error(f"Unerwarteter Fehler: {e}")
+        return None
 
 
-# Falls das Skript direkt ausgeführt wird
+def main():
+    # Setup logging
+    logger = LoggerSetup.setup_logger()
+    debug_printer = DebugPrinter()
+    logger.info("Starting SFPO Analysis")
+    
+    # Analysetyp wählen
+    analysis_type = FileHandler.select_analysis_type()
+    
+    # Konfigurationen definieren
+    quick_test_config = AnalysisConfig(
+        calculate_zscores=False,
+        calculate_force_moduli=True,
+        calculate_work_intervals=True,
+        create_standard_plots=True,
+        create_boxplots=True,
+        create_normalized_plots=True,
+        create_violin_plots=False,
+        create_zscore_plots=False,
+        export_to_excel=True
+    )
+    
+    # Vollständige Konfiguration für Mehrfachanalyse
+    full_analysis_config = AnalysisConfig()  # Alle Optionen standardmäßig True
+    
+    if analysis_type == '1':
+        # Einzelanalyse mit Schnelltest-Konfiguration
+        analyzer = process_single_series(
+            logger,
+            debug_printer,
+            config=quick_test_config
+        )
+        if analyzer:
+            # Erstelle und zeige den Plot für die einzelne Messreihe
+            plt.figure(figsize=(10, 6))
+            colors = plt.cm.plasma(np.linspace(0, 1, len(analyzer.measurements_data)))
+            
+            for i, (measurement, color) in enumerate(zip(analyzer.measurements_data, colors)):
+                distances, forces = zip(*measurement)
+                plt.plot(distances, forces, color=color, label=f'Messung {i + 1}')
+            
+            plt.xlim(0, 1000)
+            plt.ylim(0, 0.3)
+            plt.xticks(np.arange(0, 1001, 200), fontsize=12)
+            plt.yticks(np.arange(0, 0.31, 0.05), fontsize=12)
+            
+            plt.title("Auszugskurven", fontsize=14, fontweight='bold')
+            plt.xlabel('Weg [µm]', fontsize=12)
+            plt.ylabel('Kraft [N]', fontsize=12)
+            plt.legend()
+            plt.grid(True)
+            
+            # Zeige den Plot an
+            plt.show()
+            
+            logger.info("Einzelanalyse erfolgreich abgeschlossen")
+        else:
+            logger.warning("Einzelanalyse fehlgeschlagen")
+    else:
+        # Mehrfachanalyse mit voller Konfiguration
+        parent_folder = FileHandler.select_folder(analysis_type='2')
+        if not parent_folder:
+            logger.warning("Kein Ordner ausgewählt")
+            return
+        
+        exporter = ExcelExporter()
+        series_folders = FileHandler.get_measurement_series_folders(parent_folder)
+        analyzers_dict = {}
+        last_successful_analyzer = None
+        
+        for folder in series_folders:
+            logger.info(f"\nAnalysiere Messreihe: {folder.name}")
+            analyzer = process_single_series(
+                logger,
+                debug_printer,
+                folder,
+                config=full_analysis_config
+            )
+            if analyzer:
+                name = folder.name
+                exporter.add_measurement_series(name, analyzer)
+                analyzers_dict[name] = analyzer
+                last_successful_analyzer = analyzer
+            else:
+                logger.warning(f"Überspringe Messreihe {folder.name} - Analyse fehlgeschlagen")
+        
+        if analyzers_dict:
+            # Export und Plot-Erstellung basierend auf Konfiguration
+            if full_analysis_config.export_to_excel:
+                save_path = exporter.save_to_excel()
+                if save_path and isinstance(save_path, Path):
+                    # Erstelle den Hauptordner für alle Plots
+                    plots_base_folder = save_path.parent / "plots-auswertung"
+                    plots_base_folder.mkdir(exist_ok=True)
+                    
+                    # Speichere Arbeitsintervalle wenn aktiviert
+                    if full_analysis_config.calculate_work_intervals:
+                        intervals_path = exporter.save_work_intervals_to_excel()
+                        exporter.save_boxplot_data_to_excel()
+                    
+                    # Erstelle verschiedene Plots basierend auf Konfiguration
+                    if full_analysis_config.create_standard_plots:
+                        standard_plots_folder = plots_base_folder / "kraft_weg-plots"
+                        standard_plots_folder.mkdir(exist_ok=True)
+                        DataPlotter.save_plots_for_series(analyzers_dict, standard_plots_folder)
+                    
+                    if full_analysis_config.create_boxplots:
+                        boxplots_folder = plots_base_folder / "box_plots"
+                        boxplots_folder.mkdir(exist_ok=True)
+                        DataPlotter.create_boxplots(analyzers_dict, boxplots_folder)
+                    
+                    if full_analysis_config.create_work_interval_plots:  # Neue Option in AnalysisConfig
+                        work_intervals_folder = plots_base_folder / "arbeitsintervalle"
+                        work_intervals_folder.mkdir(exist_ok=True)
+                        DataPlotter.create_work_interval_plots(analyzers_dict, work_intervals_folder)
+                    
+                    if full_analysis_config.create_normalized_plots:
+                        normalized_folder = plots_base_folder / "normierte_arbeit"
+                        normalized_folder.mkdir(exist_ok=True)
+                        DataPlotter.create_normalized_plots(analyzers_dict, normalized_folder)
+                    
+                    if full_analysis_config.create_normalized_plots:
+                        mean_normalized_folder = plots_base_folder / "mittlere_normierte_arbeit"
+                        mean_normalized_folder.mkdir(exist_ok=True)
+                        DataPlotter.create_mean_normalized_plots(analyzers_dict, mean_normalized_folder)
+                    
+                    if full_analysis_config.create_violin_plots:
+                        violin_folder = plots_base_folder / "violin_plots"
+                        violin_folder.mkdir(exist_ok=True)
+                        DataPlotter.create_violin_plots(analyzers_dict, violin_folder)
+                    
+                    if full_analysis_config.create_zscore_plots and full_analysis_config.calculate_zscores:
+                        zscore_folder = plots_base_folder / "zscore_plots"
+                        zscore_folder.mkdir(exist_ok=True)
+                        DataPlotter.create_z_score_plots(analyzers_dict, zscore_folder)
+                    
+                    # ANOVA-Analyse, wenn aktiviert
+                    if full_analysis_config.perform_anova_analysis and len(analyzers_dict) >= 2:
+                        logger.info("Führe ANOVA-Analyse durch...")
+                        
+                        # Wähle einen beliebigen Analyzer für die Durchführung der Analyse
+                        first_analyzer = next(iter(analyzers_dict.values()))
+                        anova_results = first_analyzer.perform_anova(analyzers_dict)
+                        
+                        # Zeige Kurzübersicht der Ergebnisse
+                        for data_type, results in anova_results.items():
+                            if 'error' in results:
+                                logger.warning(f"ANOVA für {data_type}: Fehler - {results['error']}")
+                                continue
+                                
+                            significance = "signifikant" if results['significant'] else "nicht signifikant"
+                            logger.info(f"ANOVA für {data_type}: F={results['f_value']:.3f}, p={results['p_value']:.4f} ({significance})")
+                        
+                        # Export der ANOVA-Ergebnisse, wenn aktiviert
+                        if full_analysis_config.export_anova_results:
+                            anova_path = plots_base_folder.parent / "anova-ergebnisse"
+                            anova_path.mkdir(exist_ok=True)
+                            anova_file = anova_path / f"ANOVA_Ergebnisse.xlsx"
+                            exporter.export_anova_results(anova_results, anova_file)
+                    elif full_analysis_config.perform_anova_analysis:
+                        logger.warning("ANOVA-Analyse benötigt mindestens 2 Messreihen")
+                    
+                    logger.info(f"Ergebnisse gespeichert in: {save_path.parent}")
+        else:
+            logger.warning("Keine erfolgreichen Analysen durchgeführt")
+    
+    logger.info("Analysis completed")
+
+
 if __name__ == "__main__":
     main()

@@ -22,8 +22,9 @@ class FileHandler:
         Args:logger: Logger-Instanz für Protokollierung (optional)
         """
         self.logger = logger or logging.getLogger('SFPO_Analyzer')
-
-    def select_analysis_type(self) -> str:
+    
+    @staticmethod
+    def select_analysis_type() -> str:
         """
         Zeigt ein Fenster zur Auswahl des Analysetyps.
 
@@ -35,7 +36,7 @@ class FileHandler:
         # Fenster in den Vordergrund
         root.lift()
         root.attributes('-topmost', True)
-
+        
         # Zentriere das Fenster
         window_width = 300
         window_height = 150
@@ -44,22 +45,23 @@ class FileHandler:
         x = (screen_width / 2) - (window_width / 2)
         y = (screen_height / 2) - (window_height / 2)
         root.geometry(f'{window_width}x{window_height}+{int(x)}+{int(y)}')
-
+        
         choice = tk.StringVar(value="1")
-
+        
         tk.Label(root, text="Bitte Analysetyp wählen:").pack(pady=10)
         tk.Radiobutton(root, text="Einzelne Messreihe", variable=choice, value="1").pack()
         tk.Radiobutton(root, text="Alle Messreihen im Ordner", variable=choice, value="2").pack()
-
+        
         result = []  # Liste für das Ergebnis
-
+        
         def on_button_click():
             result.append(choice.get())
             root.destroy()
-
+        
         # Größerer, deutlicherer Button
-        tk.Button(root, text="Weiter", command=on_button_click, width=15, height=2, font=("Arial", 10, "bold")).pack(pady=20)
-
+        tk.Button(root, text="Weiter", command=on_button_click, width=15, height=2, font=("Arial", 10, "bold")).pack(
+            pady=20)
+        
         # Sicherstellen, dass das Layout aktualisiert wird
         root.update_idletasks()
         
