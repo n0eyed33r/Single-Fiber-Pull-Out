@@ -1,6 +1,7 @@
 """
-this code was made with the help of chatgpt, claude, gemini, stackoverflow .... u name it .. u gasp it
+this code was made with the help of chatgpt, claude, stackoverflow .... u name it
 """
+
 # src/config/settings.py
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,7 +19,7 @@ class MaterialParameters:
 
 
 @dataclass
-class PathManager:
+class NamingInTheNameOf:
     """
     Strings and list of strings for files and path names
     """
@@ -35,11 +36,11 @@ class PathManager:
         self.main_folder = new_path.name
         self.filenames = []  # filled later with the names of measurements
 # global instancing
-naming_storage = PathManager()
+naming_storage = NamingInTheNameOf()
 
 
 @dataclass
-class MeasurementClassifier:
+class SortOf:
     """
     Sort and select the successfully pulled out fibers.
     """
@@ -48,18 +49,18 @@ class MeasurementClassifier:
     good_ones_nr: int = None  # count of successfully pulled out fibers
     bad_ones_nr: int = None  # count of broken fibers
 # global instancing
-sort_storage = MeasurementClassifier()
+sort_storage = SortOf()
 
 
 @dataclass
-class CalculationResults:
+class Calculated:
     """
     All calculated numbers are saved here
     """
     measurements: list[tuple] = None  # measurements of successfully pulled out fibers
     fiberpulloutratio: float = None  # ratio of successfully sfpo and broken fibers
-    embeddinglength: list[float] = None  # list of the embeddinglengths (can differ measurement to measurement)
-    interfaceshearstrength: list[float] = None  # calculated IFSS (F_max/(PI*d_fiber*l_e))
-    work: list[float] = None  # Integral of each Force-Displacement Curve
+    embeddinglength: list[float] = None  # the
+    interfaceshearstrength: list[float] = None  #
+    work: list[float] = None  #
 # global instancing
-calculated_storage = CalculationResults()
+calculated_storage = Calculated()

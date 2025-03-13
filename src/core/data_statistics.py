@@ -1,8 +1,9 @@
 """
-this code was made with the help of chatgpt, claude, gemini, stackoverflow .... u name it .. u gasp it
+this code was made with the help of chatgpt, claude, stackoverflow .... u name it
 """
+
 # src/core/data_statistics.py
-from src.config.config_manager import app_config
+from src.config.settings import naming_storage, sort_storage
 import logging
 from pathlib import Path
 import pandas as pd
@@ -35,16 +36,15 @@ class MeasurementAnalyzer:
     """
     All calculations and statistical evaluations are performed in this class.
     """
-    def __init__(self, logger=None):
-        self.logger = logger or logging.getLogger('SFPO_Analyzer')
+    def __init__(self):
         self.measurements_data = []  # Liste für alle Messungen
         self.max_forces_data = []  # Liste aller Maximalkräfter jeder erfolgreichen Messung
         self.embeddinglengths = []  # Liste aller Einbettlängen
-        self.fiberdiameters = []  # Liste der Faserdurchmesser
-        self.ifssvalues = []  # Liste für die interfacial shear strength Berechnung
-        self.works = []  # Liste für die verrrichtete Arbeit
-        self.work_intervals = []  # Liste für Arbeitsintervalle
-        self.normed_intervals = []  # Liste für normierte Intervalle
+        self.fiberdiameters = []
+        self.ifssvalues = []
+        self.works = []
+        self.work_intervals = []
+        self.normed_intervals = []  # Neue Liste für normierte Intervalle
         self.mean_normed_intervals = []  # Mittelwerte
         self.stddev_normed_intervals = []  # Standardabweichungen
         self.rel_stddev_normed_intervals = []  # Relative Standardabweichungen
@@ -73,21 +73,9 @@ class MeasurementAnalyzer:
         """
         Creates full paths for all successful measurements.
         """
-        if not app_config.paths.root_path:
-            self.logger.error("Kein Root-Pfad gesetzt")
-            return []
-
-        try:
-            paths = []
-            for filename in app_config.classification.successful_measurements:
-                # Stelle sicher, dass wir mit einem korrekten Path-Objekt arbeiten
-                file_path = app_config.paths.root_path / f"{filename}.txt"
-                paths.append(file_path)
-
-            return paths
-        except Exception as e:
-            self.logger.error(f"Fehler beim Erstellen der Messpfade: {e}")
-            return []
+        return [
+            naming_storage.root_path / f"{filename}.txt"
+            for filename in sort_storage.good_ones]
 
     def read_single_measurement(self, file_path: Path) -> list[tuple[float, float]]:
         """
@@ -169,163 +157,68 @@ class MeasurementAnalyzer:
             print(f"Fehler beim Lesen des Faserdurchmessers: {e}")
             return 0.0  # oder einen anderen sinnvollen Standardwert
 
-    # Bei der process_all_fiberdiameters-Methode:
     def process_all_fiberdiameters(self):
         """Verarbeitet die Faserdurchmesser aller erfolgreichen Messungen."""
         self.fiberdiameters = []  # Liste zurücksetzen
 
         paths = self.get_measurement_paths()
-        self.logger.info(f"Verarbeite {len(paths)} Dateien für Faserdurchmesser...")
-
-        success_count = 0
-        failure_count = 0
+        print(f"\nVerarbeite {len(paths)} Dateien für Faserdurchmesser:")
 
         for i, path in enumerate(paths, 1):
             try:
                 diameter = self.find_single_fiberdiameter(path)
-                if diameter <= 0:
-                    self.logger.warning(f"Unplausible Faserdurchmesser gefunden: {diameter} für Datei {path.name}")
-                    diameter = 0.0  # Standardwert
-                    failure_count += 1
-                else:
-                    success_count += 1
-
-                self.logger.debug(f"Datei {i}/{len(paths)}: {path.name}, Durchmesser = {diameter}")
+                print(f"  Datei {i}: Durchmesser = {diameter}")
                 self.fiberdiameters.append(diameter)
-
             except Exception as e:
-                self.logger.error(f"Fehler bei Datei {i}/{len(paths)}: {path.name} - {str(e)}")
-                self.fiberdiameters.append(0.0)  # Standardwert bei Fehler
-                failure_count += 1
+                print(f"  Fehler bei Datei {i}: {e}")
 
-        self.logger.info(
-            f"Faserdurchmesser-Verarbeitung abgeschlossen: {success_count} erfolgreich, {failure_count} fehlgeschlagen")
-
-        # Validierung der Daten
-        if len(self.fiberdiameters) > 0:
-            valid_diameters = [d for d in self.fiberdiameters if d > 0]
-            if valid_diameters:
-                self.logger.info(f"Gültige Faserdurchmesser: Min={min(valid_diameters):.2f}, "
-                                 f"Max={max(valid_diameters):.2f}, "
-                                 f"Mittelwert={sum(valid_diameters) / len(valid_diameters):.2f}")
-            else:
-                self.logger.warning("Keine gültigen Faserdurchmesser gefunden!")
-        else:
-            self.logger.warning("Keine Faserdurchmesser verarbeitet!")
-
-    # Bei der check_data_consistency-Methode:
     def check_data_consistency(self):
         """Überprüft ob alle Datenlisten die gleiche Länge haben und zeigt Details"""
         measurements_len = len(self.measurements_data)
         fiber_len = len(self.fiberdiameters)
         paths_len = len(self.get_measurement_paths())
 
-        self.logger.info("Datenmengen-Konsistenzprüfung:")
-        self.logger.info(f"- Gefundene Dateipfade: {paths_len}")
-        self.logger.info(f"- Eingelesene Messungen: {measurements_len}")
-        self.logger.info(f"- Gefundene Faserdurchmesser: {fiber_len}")
+        print("\nDatenmengen:")
+        print(f"Gefundene Dateipfade: {paths_len}")
+        print(f"Eingelesene Messungen: {measurements_len}")
+        print(f"Gefundene Faserdurchmesser: {fiber_len}")
 
         if fiber_len != measurements_len:
-            self.logger.warning("Ungleiche Längen der Datenlisten!")
+            print("\nWarnung: Ungleiche Längen!")
 
             # Zeige die tatsächlichen Daten für Debugging
-            self.logger.debug("Dateipfade:")
-            for path in self.get_measurement_paths()[:5]:  # Zeige nur die ersten 5
-                self.logger.debug(f"  {path}")
+            print("\nDateipfade:")
+            for path in self.get_measurement_paths():
+                print(f"  {path}")
 
-            self.logger.debug("Faserdurchmesser (erste 5):")
-            for i, dia in enumerate(self.fiberdiameters[:5]):
-                self.logger.debug(f"  {i + 1}: {dia}")
+            print("\nFaserdurchmesser:")
+            for dia in self.fiberdiameters:
+                print(f"  {dia}")
 
-            return False
-
-        self.logger.info("Datenkonsistenz OK: Alle Listen haben die gleiche Länge.")
-        return True
+        return measurements_len == fiber_len
 
     def interfaceshearstrength(self):
         """
         Berechnet die scheinbare Grenzflächenscherfestigkeit (IFSS) für alle Messungen.
-        Mit verbesserter Fehlerbehandlung und Validitätsprüfungen.
         """
-        # Zuerst sicherstellen, dass wir überhaupt Messungen haben
-        if not self.measurements_data:
-            self.logger.warning("Keine Messungen vorhanden, IFSS-Berechnung übersprungen")
-            return
-
         # Zuerst sicherstellen, dass wir alle benötigten Werte haben
         if not self.fiberdiameters:
-            self.logger.info("Faserdurchmesser werden verarbeitet...")
             self.process_all_fiberdiameters()
-
         # Prüfe Datenkonsistenz
-        measurements_len = len(self.measurements_data)
-        fiber_len = len(self.fiberdiameters)
-
-        self.logger.info(f"Datenprüfung: {measurements_len} Messungen, {fiber_len} Faserdurchmesser")
-
-        if measurements_len == 0 or fiber_len == 0:
-            self.logger.warning("Keine Daten für IFSS-Berechnung verfügbar")
-            return
-
-        if measurements_len != fiber_len:
-            self.logger.warning(f"Ungleiche Anzahl von Messungen ({measurements_len}) und Faserdurchmessern ({fiber_len})")
-            self.logger.info("Verwende minimale gemeinsame Länge für die Berechnung")
-            min_len = min(measurements_len, fiber_len)
-        else:
-            min_len = measurements_len
-
-        # Liste zurücksetzen
-        self.ifssvalues = []
-
-        # Für jede Messung IFSS berechnen, aber nur so viele wie Faserdurchmesser vorhanden
-        for i in range(min_len):
+        if not self.check_data_consistency():
+            raise ValueError("Ungleiche Anzahl von Messungen und Faserdurchmessern!")
+        self.ifssvalues = []  # Liste zurücksetzen
+        # Für jede Messung IFSS berechnen
+        for i, measurement in enumerate(self.measurements_data):
             try:
-                # Prüfe, ob gültige Daten vorliegen
-                if i >= len(self.measurements_data) or not self.measurements_data[i]:
-                    self.logger.warning(f"Keine gültigen Messdaten für Index {i}")
-                    self.ifssvalues.append(0.0)
-                    continue
-
-                if i >= len(self.fiberdiameters) or self.fiberdiameters[i] <= 0:
-                    self.logger.warning(f"Ungültiger Faserdurchmesser ({self.fiberdiameters[i]}) für Index {i}")
-                    self.ifssvalues.append(0.0)
-                    continue
-
-                # Berechne Werte
-                max_force = self.find_max_force_single(self.measurements_data[i])
-                embedding_length = self.find_single_embeddinglength(self.measurements_data[i])
+                max_force = self.find_max_force_single(measurement)
+                embedding_length = self.find_single_embeddinglength(measurement)
                 fiber_diameter = self.fiberdiameters[i]
-
-                # Datenvalidierung
-                if max_force <= 0 or embedding_length <= 0 or fiber_diameter <= 0:
-                    self.logger.warning(f"Ungültige Berechnungswerte bei Index {i}: "
-                                        f"Kraft={max_force}, Länge={embedding_length}, Durchmesser={fiber_diameter}")
-                    self.ifssvalues.append(0.0)
-                    continue
-
                 # Berechnung der IFSS -> F_max/(PI*l_e*d)
                 ifss = (max_force / (math.pi * embedding_length * fiber_diameter)) * (10 ** 6)
-
-                # Plausibilitätsprüfung für IFSS (typische Werte liegen unter 100 MPa)
-                if ifss > 500:  # Extrem hoher Wert, wahrscheinlich Berechnungsfehler
-                    self.logger.warning(f"Ungewöhnlich hoher IFSS-Wert bei Index {i}: {ifss:.2f} MPa")
-
                 self.ifssvalues.append(round(ifss, 2))
-
             except Exception as e:
-                self.logger.error(f"Fehler bei IFSS-Berechnung für Index {i}: {str(e)}")
-                self.ifssvalues.append(0.0)
-
-        # Aktualisiere das Mapping für statistische Berechnungen
-        self._update_mapping()
-
-        # Informationen über berechnete Werte
-        valid_values = [v for v in self.ifssvalues if v > 0]
-        if valid_values:
-            self.logger.info(f"IFSS berechnet: {len(valid_values)} gültige Werte, "
-                             f"Bereich: {min(valid_values):.2f} - {max(valid_values):.2f} MPa")
-        else:
-            self.logger.warning("Keine gültigen IFSS-Werte berechnet")
+                print(f"Fehler bei Messung {i}: {e}")
 
     def calculate_single_work(self, measurement: list[tuple[float, float]], embedding_length: float) -> float:
         """

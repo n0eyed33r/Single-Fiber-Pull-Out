@@ -16,9 +16,11 @@ import statsmodels.api as sm
 from statsmodels.formula.api import ols
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Union, Any
+from typing import Dict, Any
 import logging
 from datetime import datetime
+import traceback
+
 
 class StatisticalAnalyzer:
     """
@@ -49,7 +51,7 @@ class StatisticalAnalyzer:
         # Für die Speicherung von Ergebnissen
         self.bootstrap_results = {}
         self.anova_results = {}
-
+    
     def bootstrap_sample(self, data: np.ndarray, n_bootstrap: int = 1000) -> Dict[str, Any]:
         """
         Führt Bootstrap-Resampling für einen einzelnen Datensatz durch.
@@ -72,39 +74,80 @@ class StatisticalAnalyzer:
                 'ci_median': np.array([np.nan, np.nan]),
                 'ci_std': np.array([np.nan, np.nan])
             }
-
+        
+        # Konvertiere zu NumPy-Array, falls noch nicht geschehen
+        if not isinstance(data, np.ndarray):
+            try:
+                data = np.array(data, dtype=float)
+            except Exception as e:
+                self.logger.warning(f"Fehler bei der Konvertierung zu NumPy-Array: {e}")
+                return {
+                    'means': np.array([]),
+                    'medians': np.array([]),
+                    'stds': np.array([]),
+                    'ci_mean': np.array([np.nan, np.nan]),
+                    'ci_median': np.array([np.nan, np.nan]),
+                    'ci_std': np.array([np.nan, np.nan])
+                }
+        
+        # Entferne NaN-Werte
+        data = data[~np.isnan(data)]
+        
+        if len(data) == 0:
+            self.logger.warning("Nach der NaN-Filterung sind keine Daten mehr übrig")
+            return {
+                'means': np.array([]),
+                'medians': np.array([]),
+                'stds': np.array([]),
+                'ci_mean': np.array([np.nan, np.nan]),
+                'ci_median': np.array([np.nan, np.nan]),
+                'ci_std': np.array([np.nan, np.nan])
+            }
+        
         # Stichprobengröße
         n = len(data)
         self.logger.info(f"Führe Bootstrap mit {n_bootstrap} Wiederholungen für {n} Datenpunkte durch")
-
+        
         # Speicher für Bootstrap-Statistiken
         bootstrap_means = np.zeros(n_bootstrap)
         bootstrap_medians = np.zeros(n_bootstrap)
         bootstrap_stds = np.zeros(n_bootstrap)
-
+        
         # Erzeuge n_bootstrap Stichproben mit Zurücklegen
-        for i in range(n_bootstrap):
-            # Ziehe zufällige Indizes mit Zurücklegen
-            indices = np.random.choice(n, size=n, replace=True)
-
-            # Erstelle Bootstrap-Stichprobe
-            bootstrap_sample = data[indices]
-
-            # Berechne und speichere Statistiken
-            bootstrap_means[i] = np.mean(bootstrap_sample)
-            bootstrap_medians[i] = np.median(bootstrap_sample)
-            bootstrap_stds[i] = np.std(bootstrap_sample, ddof=1)  # ddof=1 für unverzerrte Schätzung
-
+        try:
+            for i in range(n_bootstrap):
+                # Ziehe zufällige Indizes mit Zurücklegen
+                indices = np.random.choice(n, size=n, replace=True)
+                
+                # Erstelle Bootstrap-Stichprobe
+                bootstrap_sample = data[indices]
+                
+                # Berechne und speichere Statistiken
+                bootstrap_means[i] = np.mean(bootstrap_sample)
+                bootstrap_medians[i] = np.median(bootstrap_sample)
+                bootstrap_stds[i] = np.std(bootstrap_sample, ddof=1)  # ddof=1 für unverzerrte Schätzung
+        except Exception as e:
+            self.logger.error(f"Fehler bei der Bootstrap-Berechnung: {e}")
+            self.logger.error(traceback.format_exc())
+            return {
+                'means': np.array([]),
+                'medians': np.array([]),
+                'stds': np.array([]),
+                'ci_mean': np.array([np.nan, np.nan]),
+                'ci_median': np.array([np.nan, np.nan]),
+                'ci_std': np.array([np.nan, np.nan])
+            }
+        
         # Berechne Konfidenzintervalle (95%)
         ci_mean = np.percentile(bootstrap_means, [2.5, 97.5])
         ci_median = np.percentile(bootstrap_medians, [2.5, 97.5])
         ci_std = np.percentile(bootstrap_stds, [2.5, 97.5])
-
+        
         # Berechne auch andere Konfidenzintervalle (90%)
         ci_mean_90 = np.percentile(bootstrap_means, [5, 95])
-
+        
         self.logger.info(f"Bootstrap abgeschlossen. 95% CI für Mittelwert: [{ci_mean[0]:.4f}, {ci_mean[1]:.4f}]")
-
+        
         return {
             'means': bootstrap_means,
             'medians': bootstrap_medians,
@@ -117,7 +160,7 @@ class StatisticalAnalyzer:
             'original_median': np.median(data),
             'original_std': np.std(data, ddof=1)
         }
-
+    
     def bootstrap_sample_for_anova(self, data: np.ndarray, target_size: int = 10, n_bootstrap: int = 1000) -> np.ndarray:
         """
         Erzeugt mit Bootstrap eine größere Stichprobe für die ANOVA.
@@ -134,30 +177,66 @@ class StatisticalAnalyzer:
         if data is None or len(data) == 0:
             self.logger.warning("Leerer Datensatz für Bootstrap-ANOVA übergeben")
             return np.array([])
-
+        
+        # Konvertiere zu NumPy-Array, falls noch nicht geschehen
+        if not isinstance(data, np.ndarray):
+            try:
+                data = np.array(data, dtype=float)
+            except Exception as e:
+                self.logger.warning(f"Fehler bei der Konvertierung zu NumPy-Array: {e}")
+                return np.array([])
+        
+        # Entferne NaN-Werte
+        data = data[~np.isnan(data)]
+        
+        if len(data) == 0:
+            self.logger.warning("Nach der NaN-Filterung sind keine Daten mehr übrig")
+            return np.array([])
+        
+        # Wenn wir bereits genug Daten haben, nehmen wir einfach eine Zufallsstichprobe
+        if len(data) >= target_size:
+            self.logger.info(f"Genügend Daten vorhanden, nehme zufällige Stichprobe der Größe {target_size}")
+            try:
+                return np.random.choice(data, size=target_size, replace=False)
+            except Exception as e:
+                self.logger.error(f"Fehler bei der Zufallsstichprobe: {e}")
+                return data  # Gib die Originaldaten zurück
+        
         # Stichprobengröße
         n = len(data)
-
-        # Erzeuge eine große Menge an Bootstrap-Samples
-        all_samples = np.zeros(n_bootstrap * n)
-
-        # Erzeuge n_bootstrap Stichproben mit Zurücklegen
-        for i in range(n_bootstrap):
-            # Ziehe zufällige Indizes mit Zurücklegen
-            indices = np.random.choice(n, size=n, replace=True)
-
-            # Erstelle Bootstrap-Stichprobe und speichere sie
-            all_samples[i * n:(i + 1) * n] = data[indices]
-
-        # Wähle zufällig target_size Elemente aus allen Samples
-        if len(all_samples) >= target_size:
-            extended_sample = np.random.choice(all_samples, size=target_size, replace=False)
-        else:
-            # Wenn nicht genug Samples vorhanden sind, verwende alle und ergänze durch Ziehen mit Zurücklegen
-            extended_sample = np.random.choice(all_samples, size=target_size, replace=True)
-
-        self.logger.info(f"Bootstrap für ANOVA: Datensatz von {n} auf {target_size} Datenpunkte erweitert")
-        return extended_sample
+        
+        try:
+            # Erzeuge eine große Menge an Bootstrap-Samples
+            all_samples = np.zeros(n_bootstrap * n)
+            
+            # Erzeuge n_bootstrap Stichproben mit Zurücklegen
+            for i in range(n_bootstrap):
+                # Ziehe zufällige Indizes mit Zurücklegen
+                indices = np.random.choice(n, size=n, replace=True)
+                
+                # Erstelle Bootstrap-Stichprobe und speichere sie
+                all_samples[i * n:(i + 1) * n] = data[indices]
+            
+            # Wähle zufällig target_size Elemente aus allen Samples
+            if len(all_samples) >= target_size:
+                extended_sample = np.random.choice(all_samples, size=target_size, replace=False)
+            else:
+                # Wenn nicht genug Samples vorhanden sind, verwende alle und ergänze durch Ziehen mit Zurücklegen
+                extended_sample = np.random.choice(all_samples, size=target_size, replace=True)
+            
+            self.logger.info(f"Bootstrap für ANOVA: Datensatz von {n} auf {target_size} Datenpunkte erweitert")
+            return extended_sample
+        
+        except Exception as e:
+            self.logger.error(f"Fehler bei Bootstrap-ANOVA: {e}")
+            self.logger.error(traceback.format_exc())
+            
+            # Im Fehlerfall geben wir die Originaldaten zurück, eventuell mit Wiederholung, um target_size zu erreichen
+            if n < target_size:
+                # Wiederhole Datenpunkte, um Zielgröße zu erreichen
+                return np.random.choice(data, size=target_size, replace=True)
+            else:
+                return data
 
     def perform_bootstrap_analysis(self, data_dict: Dict[str, np.ndarray], output_folder: Path = None) -> Dict[
         str, Dict[str, Any]]:
@@ -244,7 +323,7 @@ class StatisticalAnalyzer:
         plt.close()
 
         self.logger.info(f"Bootstrap-Plot für {name} gespeichert: {out_path}")
-
+    
     def perform_anova(self,
                       data_dict: Dict[str, np.ndarray],
                       target_size: int = 10,
@@ -266,9 +345,9 @@ class StatisticalAnalyzer:
         if len(data_dict) < 2:
             self.logger.warning(f"Mindestens 2 Gruppen für ANOVA benötigt, aber nur {len(data_dict)} bereitgestellt")
             return {'error': 'Zu wenige Gruppen für ANOVA'}
-
+        
         self.logger.info(f"Starte ANOVA-Analyse für Variable '{variable_name}' mit {len(data_dict)} Gruppen")
-
+        
         # Erweitere jede Gruppe mit Bootstrap
         extended_data = {}
         for name, data in data_dict.items():
@@ -276,62 +355,64 @@ class StatisticalAnalyzer:
             if data is None or len(data) == 0:
                 self.logger.warning(f"Keine Daten für Gruppe '{name}', überspringe")
                 continue
-
+            
             # Erweitere Daten mit Bootstrap
             extended_data[name] = self.bootstrap_sample_for_anova(data, target_size)
-
+        
         # Überprüfe, ob nach der Filterung noch genügend Gruppen übrig sind
         if len(extended_data) < 2:
             self.logger.warning("Nach der Datenprüfung verbleiben weniger als 2 Gruppen für ANOVA")
             return {'error': 'Unzureichende Daten für ANOVA nach Filterung'}
-
+        
         # Erstelle DataFrame für ANOVA
         data_for_df = []
         group_labels = []
-
+        
         for name, data in extended_data.items():
-            data_for_df.append(data)
-            group_labels.extend([name] * len(data))
-
-        # Sammle alle Daten in einen Array
-        all_data = np.concatenate(list(extended_data.values()))
-
+            for value in data:  # FIX: Iteriere durch alle Werte in der Gruppe
+                data_for_df.append(value)
+                group_labels.append(name)
+        
         # Erstelle DataFrame
         df = pd.DataFrame({
-            'value': all_data,
+            'value': data_for_df,
             'group': group_labels
         })
-
+        
         # Führe One-Way ANOVA durch
         try:
             # Erstelle das Modell
             model = ols('value ~ group', data=df).fit()
             anova_table = sm.stats.anova_lm(model, typ=2)
-
+            
             # Residuen für Annahmentests
             residuals = model.resid
             fitted_values = model.fittedvalues
-
+            
             # Normalitätstest
             shapiro_test = stats.shapiro(residuals)
-
+            
             # Homogenitätstest der Varianzen (Levene-Test)
             # Vorbereitung der Daten für den Levene-Test
             groups_for_levene = [group_data for group_data in extended_data.values()]
             levene_test = stats.levene(*groups_for_levene)
-
+            
             # Berechne Effektgröße (Eta-Quadrat)
             SST = ((df['value'] - df['value'].mean()) ** 2).sum()
             SSE = ((residuals) ** 2).sum()
-            eta_squared = (SST - SSE) / SST
-
+            eta_squared = (SST - SSE) / SST if SST > 0 else 0  # FIX: Vermeide Division durch Null
+            
             # Post-hoc-Test, wenn ANOVA signifikant ist
             tukey_results = None
-            if anova_table.loc['group', 'PR(>F)'] < 0.05:
+            p_value = anova_table.loc['group', 'PR(>F)']
+            if p_value < 0.05:
                 self.logger.info("ANOVA ist signifikant. Führe Tukey HSD Post-hoc-Test durch")
-                tukey = pairwise_tukeyhsd(endog=df['value'], groups=df['group'], alpha=0.05)
-                tukey_results = tukey
-
+                try:
+                    tukey = pairwise_tukeyhsd(endog=df['value'], groups=df['group'], alpha=0.05)
+                    tukey_results = tukey
+                except Exception as e:
+                    self.logger.error(f"Fehler beim Tukey-Test: {str(e)}")
+            
             # Ergebnisse in Dictionary speichern
             results = {
                 'anova_table': anova_table,
@@ -342,21 +423,29 @@ class StatisticalAnalyzer:
                 'residuals': residuals,
                 'fitted_values': fitted_values,
                 'tukey_results': tukey_results,
-                'df': df
+                'df': df,
+                'p_value': p_value,  # FIX: Explizit p-Wert speichern für einfacheren Zugriff
+                'f_value': anova_table.loc['group', 'F']  # FIX: Explizit F-Wert speichern
             }
-
+            
             # Visualisiere die Ergebnisse, wenn output_folder angegeben ist
-            if output_folder is not None:
-                self.visualize_anova_results(results, variable_name, output_folder)
-
+            if output_folder is not None and hasattr(self, 'visualize_anova_results'):
+                try:
+                    output_folder.mkdir(exist_ok=True, parents=True)
+                    self.visualize_anova_results(results, variable_name, output_folder)
+                except Exception as e:
+                    self.logger.error(f"Fehler bei der Visualisierung: {str(e)}")
+            
             # Speichere Ergebnisse für spätere Verwendung
             self.anova_results[variable_name] = results
-
-            self.logger.info(f"ANOVA-Analyse für '{variable_name}' abgeschlossen.")
+            
+            self.logger.info(f"ANOVA-Analyse für '{variable_name}' abgeschlossen. p-Wert: {p_value:.4f}")
             return results
-
+        
         except Exception as e:
             self.logger.error(f"Fehler bei ANOVA-Analyse: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return {'error': str(e)}
 
     def visualize_anova_results(self, results: Dict[str, Any], variable_name: str, output_folder: Path) -> None:

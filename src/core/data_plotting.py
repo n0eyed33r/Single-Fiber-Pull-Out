@@ -1,21 +1,9 @@
-"""
-this code was made with the help of chatgpt, claude, gemini, stackoverflow .... u name it
-"""
 # src/core/data_plotting.py
 import matplotlib.pyplot as plt
 from pathlib import Path
 import numpy as np
-import logging
 
 class DataPlotter:
-
-    def __init__(self, logger=None):
-        """
-        Initialisiert den DataPlotter mit optionalem Logger.
-        Args:logger: Logger-Instanz für Protokollierung (optional)
-        """
-        self.logger = logger or logging.getLogger('SFPO_Analyzer')
-
     @staticmethod
     def setup_plot_style():
         """Konfiguriert den grundlegenden Plot-Stil"""
@@ -26,56 +14,42 @@ class DataPlotter:
         plt.rcParams['ytick.major.width'] = 3
 
     @staticmethod
-    @staticmethod
     def save_plots_for_series(analyzers_dict: dict, plots_folder: Path):
         """Erstellt und speichert Plots für alle Messreihen."""
-        # Prüfe, ob das Verzeichnis existiert, wenn nicht, erstelle es
-        plots_folder.mkdir(exist_ok=True, parents=True)
-
         # Verwende Plasma-Farbschema
         colors = plt.cm.plasma(np.linspace(0, 1, 10))  # 10 Farben aus dem Plasma-Schema
-
+        
         DataPlotter.setup_plot_style()  # Setze Grundstil
-
+        
         for name, analyzer in analyzers_dict.items():
-            # Überprüfe, ob Messdaten vorhanden sind
-            if not analyzer.measurements_data:
-                print(f"Keine Messdaten für {name} vorhanden, überspringe Plot-Erstellung.")
-                continue
-
             plt.figure(figsize=(10, 8))
-
+            
             # Plot jede Messung mit einer Farbe aus dem Plasma-Schema
             for i, (measurement, color) in enumerate(zip(analyzer.measurements_data, colors)):
-                if measurement:  # Prüfe, ob die Messung Daten enthält
-                    distances, forces = zip(*measurement)
-                    plt.plot(distances, forces, color=color, label=f'Messung {i + 1}')
-
+                distances, forces = zip(*measurement)
+                plt.plot(distances, forces, color=color, label=f'Messung {i + 1}')
+                
             # Achsenlimits und Ticks setzen
             plt.xlim(0, 1000)
             plt.ylim(0, 0.3)
-            plt.xticks(np.arange(0, 1001, 200), fontsize=22, fontweight='bold')
-            plt.yticks(np.arange(0, 0.31, 0.05), fontsize=22, fontweight='bold')
-
+            plt.xticks(np.arange(0, 1001, 200),fontsize=22, fontweight='bold')
+            plt.yticks(np.arange(0, 0.31, 0.05),fontsize=22, fontweight='bold')
+            
             # Beschriftungen
+            # plt.title(name, fontsize=24, fontweight='bold')
             plt.xlabel('Displacement [µm]', fontsize=24, fontweight='bold')
             plt.ylabel('Force [N]', fontsize=24, fontweight='bold')
             # Ersetze Unterstriche im Titel durch Leerzeichen
             title = name.replace('_', ' ')
-
+            # plt.title(title)
+            
+            # plt.legend()
             plt.grid(True)
-
-            # Erstelle den vollständigen Pfad für die Plotdatei
+            
+            # Speichere Plot
             plot_path = plots_folder / f"{name}_plot.png"
-
-            # Speichere Plot mit expliziter Fehlerbehandlung
-            try:
-                plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-                print(f"Plot erfolgreich gespeichert: {plot_path}")
-            except Exception as e:
-                print(f"Fehler beim Speichern des Plots {name}: {str(e)}")
-            finally:
-                plt.close()  # Wichtig: Figure schließen, um Speicherlecks zu vermeiden
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close()
 
     @staticmethod
     def create_work_interval_plots(analyzers_dict: dict, plots_folder: Path):
@@ -161,7 +135,7 @@ class DataPlotter:
             # F_max Boxplot für diese Messreihe
             plt.figure(figsize=(10, 7))
             plt.boxplot([analyzer.max_forces_data], labels=[name])
-            #plt.title(f'Maximalkräfte - {name}', fontsize=24, fontweight='bold')
+            plt.title(f'Maximalkräfte - {name}', fontsize=24, fontweight='bold')
             plt.ylabel('F_max [N]', fontsize=24, fontweight='bold')
             plt.xlabel('Probe', fontsize=24, fontweight='bold')
             plt.xticks(fontsize=22, fontweight='bold')
@@ -176,7 +150,7 @@ class DataPlotter:
             # Arbeits-Boxplot für diese Messreihe
             plt.figure(figsize=(10, 10))
             plt.boxplot([analyzer.works], labels=[name])
-            #plt.title(f'Verrichtete Arbeit - {name}', fontsize=24, fontweight='bold')
+            plt.title(f'Verrichtete Arbeit - {name}', fontsize=24, fontweight='bold')
             plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
             plt.xlabel('Probe', fontsize=24, fontweight='bold')
             plt.xticks(fontsize=22, fontweight='bold')
@@ -214,7 +188,7 @@ class DataPlotter:
                          marker='o')  # Marker für bessere Sichtbarkeit der Messpunkte
             
             # Beschriftungen und Formatierung
-            #plt.title(f'Normierte Arbeit - {name}', fontsize=24, fontweight='bold')
+            plt.title(f'Normierte Arbeit - {name}', fontsize=24, fontweight='bold')
             plt.xlabel('Relative Position [%]', fontsize=24, fontweight='bold')
             plt.ylabel('Normierte Arbeit pro Intervall', fontsize=24, fontweight='bold')
             
@@ -267,7 +241,7 @@ class DataPlotter:
                          label='Mittelwert mit Standardabweichung')
             
             # Beschriftungen und Formatierung
-            #plt.title(f'Mittlere normierte Arbeit - {name}', fontsize=24, fontweight='bold')
+            plt.title(f'Mittlere normierte Arbeit - {name}', fontsize=24, fontweight='bold')
             plt.xlabel('Relative Position [%]', fontsize=24, fontweight='bold')
             plt.ylabel('Normierte Arbeit pro Intervall', fontsize=24, fontweight='bold')
             
