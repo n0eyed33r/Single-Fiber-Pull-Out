@@ -7,11 +7,12 @@ from src.utils.logger_setup import LoggerSetup
 from src.core.data_plotting import DataPlotter
 from src.core.excel_exporter import ExcelExporter
 from src.config.settings import naming_storage
+from src.core.statistical_analysis import StatisticalAnalyzer  # Neu importiert
 from pathlib import Path
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Optional
+from typing import Optional, Dict
 
 
 @dataclass
@@ -21,12 +22,13 @@ class AnalysisConfig:
     calculate_zscores: bool = True
     calculate_force_moduli: bool = True
     calculate_work_intervals: bool = True
+    calculate_area_normalized_works: bool = True  # Neue Option
     
     # Statistische Analysen
-    perform_bootstrap: bool = False  # Neue Option für Bootstrap
-    perform_anova: bool = False      # Neue Option für ANOVA
-    bootstrap_samples: int = 1000    # Anzahl der Bootstrap-Stichproben
-    anova_target_size: int = 10      # Zielgröße für ANOVA-Bootstrap
+    perform_bootstrap: bool = False  # Option für Bootstrap
+    perform_anova: bool = False  # Option für ANOVA
+    bootstrap_samples: int = 1000  # Anzahl der Bootstrap-Stichproben
+    anova_target_size: int = 10  # Zielgröße für ANOVA-Bootstrap
     
     # Plot-Erstellung
     create_standard_plots: bool = True  # Kraft-Weg-Diagramme
@@ -35,7 +37,7 @@ class AnalysisConfig:
     create_normalized_plots: bool = True  # Normierte Arbeitsplots
     create_violin_plots: bool = True  # Violin-Plots
     create_zscore_plots: bool = True  # Z-Score-Plots
-    create_statistical_plots: bool = True  # Neue Option für statistische Plots
+    create_statistical_plots: bool = True  # Option für statistische Plots
     
     # Export
     export_to_excel: bool = True
@@ -96,6 +98,17 @@ def process_single_series(
         analyzer.calculate_all_works()
         analyzer.interfaceshearstrength()
         
+        # Flächennormierte Arbeit berechnen, unabhängig von der Konfiguration
+        # Dies stellt sicher, dass die area_normalized_works Liste immer befüllt wird
+        print("\nBerechne flächennormierte Arbeit:")
+        analyzer.calculate_area_normalized_works()
+        
+        # Optionale Berechnungen basierend auf Konfiguration
+        if config.calculate_force_moduli:
+            analyzer.calculate_force_modulus()
+            print(f"Verbundmodul: {analyzer.calculate_mean('force_modulus'):.3f} ± "
+                  f"{analyzer.calculate_stddev('force_modulus'):.3f} N/µm")
+        
         # Statistische Auswertungen
         print("\nStatistische Auswertung:")
         print(f"Maximalkräfte: {analyzer.calculate_mean('forces'):.2f} ± {analyzer.calculate_stddev('forces'):.2f} N")
@@ -105,13 +118,7 @@ def process_single_series(
             f"Faserdurchmesser: {analyzer.calculate_mean('diameters'):.2f} ± {analyzer.calculate_stddev('diameters'):.2f} µm")
         print(f"IFSS: {analyzer.calculate_mean('ifss'):.2f} ± {analyzer.calculate_stddev('ifss'):.2f} MPa")
         print(f"Arbeit: {analyzer.calculate_mean('works'):.2f} ± {analyzer.calculate_stddev('works'):.2f} µJ")
-
-        # Optionale Berechnungen basierend auf Konfiguration
-        if config.calculate_force_moduli:
-            analyzer.calculate_force_modulus()
-            print(f"Verbundmodul: {analyzer.calculate_mean('force_modulus'):.3f} ± "
-                  f"{analyzer.calculate_stddev('force_modulus'):.3f} N/µm")
-
+        
         # In der main.py, wo die anderen statistischen Ausgaben sind
         if config.calculate_work_intervals:
             print("\nKumulative normierte Arbeit:")
@@ -122,7 +129,7 @@ def process_single_series(
                 mean = stats[position]["mean"]
                 std = stats[position]["std"]
                 print(f"{position:8} | {mean:.4f} ± {std:.4f}")
-
+        
         # Optionale Arbeitsberechnungen
         if config.calculate_work_intervals:
             analyzer.calculate_all_work_intervals()
@@ -148,6 +155,52 @@ def process_single_series(
     except Exception as e:
         logger.error(f"Unerwarteter Fehler: {e}")
         return None
+
+
+def perform_statistical_analysis(
+        analyzers_dict: Dict[str, MeasurementAnalyzer],
+        config: AnalysisConfig,
+        output_folder: Path,
+        logger
+) -> None:
+    """
+    Führt statistische Analysen (Bootstrap und ANOVA) für die Messreihen durch.
+
+    Args:
+        analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+        config: Konfigurationsobjekt mit den statistischen Einstellungen
+        output_folder: Ordner zum Speichern der Ergebnisse
+        logger: Logger-Instanz für Protokollierung
+    """
+    # Erstelle den Ordner für statistische Analysen
+    stats_folder = output_folder / "statistische_analysen"
+    stats_folder.mkdir(exist_ok=True)
+    logger.info(f"Statistische Analysen werden in {stats_folder} gespeichert")
+    
+    # Initialisiere den StatisticalAnalyzer
+    stat_analyzer = StatisticalAnalyzer(logger=logger)
+    
+    # Führe statistische Analysen durch, wenn konfiguriert
+    if config.perform_bootstrap or config.perform_anova:
+        logger.info("Starte erweiterte statistische Analysen...")
+        
+        # Führe die vergleichende statistische Analyse durch
+        # Diese Methode führt sowohl Bootstrap als auch ANOVA durch, basierend auf der Konfiguration
+        results = stat_analyzer.compare_groups(
+            analyzer_dict=analyzers_dict,
+            output_folder=stats_folder,
+            bootstrap_n=config.bootstrap_samples,
+            anova_target_size=config.anova_target_size
+        )
+        
+        logger.info("Statistische Analysen abgeschlossen")
+        
+        # Überprüfe, welche Analysen durchgeführt wurden
+        if 'bootstrap' in results and results['bootstrap']:
+            logger.info("Bootstrap-Analyse wurde durchgeführt")
+        
+        if 'anova' in results and results['anova']:
+            logger.info("ANOVA-Analyse wurde durchgeführt")
 
 
 def main():
@@ -241,7 +294,13 @@ def main():
             logger.warning("Kein Ordner ausgewählt")
             return
         
-        exporter = ExcelExporter()
+        # Erstelle einen Ergebnisordner innerhalb des ausgewählten Ordners
+        results_folder = parent_folder / "SFPO_Ergebnisse"
+        results_folder.mkdir(exist_ok=True)
+        logger.info(f"Ergebnisse werden in {results_folder} gespeichert")
+        
+        # Exporter mit dem Ergebnisordner initialisieren
+        exporter = ExcelExporter(output_folder=results_folder)
         series_folders = FileHandler.get_measurement_series_folders(parent_folder)
         analyzers_dict = {}
         last_successful_analyzer = None
@@ -265,16 +324,23 @@ def main():
         if analyzers_dict:
             # Export und Plot-Erstellung basierend auf Konfiguration
             if full_analysis_config.export_to_excel:
+                # Speichere alle Excel-Dateien automatisch im Ergebnisordner
                 save_path = exporter.save_to_excel()
+                
                 if save_path and isinstance(save_path, Path):
                     # Erstelle den Hauptordner für alle Plots
-                    plots_base_folder = save_path.parent / "plots-auswertung"
+                    plots_base_folder = results_folder / "plots-auswertung"
                     plots_base_folder.mkdir(exist_ok=True)
                     
                     # Speichere Arbeitsintervalle wenn aktiviert
                     if full_analysis_config.calculate_work_intervals:
                         intervals_path = exporter.save_work_intervals_to_excel()
                         exporter.save_boxplot_data_to_excel()
+                        
+                        # Neue separate Excel-Datei für flächennormierte Arbeit
+                        area_norm_path = exporter.save_area_normalized_work_to_excel()
+                        if area_norm_path:
+                            logger.info(f"Flächennormierte Arbeitsdaten gespeichert in: {area_norm_path}")
                     
                     # Erstelle verschiedene Plots basierend auf Konfiguration
                     if full_analysis_config.create_standard_plots:
@@ -286,6 +352,16 @@ def main():
                         boxplots_folder = plots_base_folder / "box_plots"
                         boxplots_folder.mkdir(exist_ok=True)
                         DataPlotter.create_boxplots(analyzers_dict, boxplots_folder)
+                        
+                        # Neuer Aufruf für den flächennormierten Arbeits-Boxplot
+                        DataPlotter.create_area_normalized_work_boxplot(analyzers_dict, boxplots_folder)
+                    
+                    # Erstelle einen eigenen Ordner für die flächennormierten Arbeitsplots
+                    area_norm_plots_folder = plots_base_folder / "flaechennormierte_arbeit_plots"
+                    area_norm_plots_folder.mkdir(exist_ok=True)
+                    
+                    # Erstelle die neuen Visualisierungen
+                    DataPlotter.create_area_normalized_work_plot(analyzers_dict, area_norm_plots_folder)
                     
                     if full_analysis_config.create_work_interval_plots:
                         work_intervals_folder = plots_base_folder / "arbeitsintervalle"
@@ -296,6 +372,9 @@ def main():
                         normalized_folder = plots_base_folder / "normierte_arbeit"
                         normalized_folder.mkdir(exist_ok=True)
                         DataPlotter.create_normalized_plots(analyzers_dict, normalized_folder)
+                        
+                        # Methode für gemeinsamen Plot aller normierten Arbeitsintervalle
+                        DataPlotter.create_combined_normalized_plots(analyzers_dict, normalized_folder)
                     
                     if full_analysis_config.create_normalized_plots:
                         mean_normalized_folder = plots_base_folder / "mittlere_normierte_arbeit"
@@ -312,17 +391,16 @@ def main():
                         zscore_folder.mkdir(exist_ok=True)
                         DataPlotter.create_z_score_plots(analyzers_dict, zscore_folder)
                     
-                    # Führe statistische Analysen durch, wenn aktiviert
+                    # Statistische Analysen (Bootstrap und ANOVA)
                     if full_analysis_config.perform_bootstrap or full_analysis_config.perform_anova:
-                        logger.info("Starte statistische Analysen...")
-                        FileHandler.perform_statistical_analysis(  # Verwende FileHandler
+                        perform_statistical_analysis(
                             analyzers_dict=analyzers_dict,
-                            logger=logger,
-                            plots_base_folder=plots_base_folder,
-                            config=full_analysis_config
+                            config=full_analysis_config,
+                            output_folder=results_folder,
+                            logger=logger
                         )
                     
-                    logger.info(f"Ergebnisse gespeichert in: {save_path.parent}")
+                    logger.info(f"Alle Ergebnisse gespeichert in: {results_folder}")
         else:
             logger.warning("Keine erfolgreichen Analysen durchgeführt")
     

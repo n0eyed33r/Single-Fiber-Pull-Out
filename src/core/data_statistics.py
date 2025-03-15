@@ -16,17 +16,18 @@ from dataclasses import dataclass
 class AnalysisConfig:
     """Konfigurationsklasse für die Steuerung der Analyseschritte"""
     # Berechnungen
-    calculate_zscores: bool = False
-    calculate_force_moduli: bool = False
+    calculate_zscores: bool = True
+    calculate_force_moduli: bool = True
     calculate_work_intervals: bool = True
+    calculate_area_normalized_works: bool = True
     
     # Plot-Erstellung
     create_standard_plots: bool = True  # Kraft-Weg-Diagramme
     create_boxplots: bool = True  # Boxplots für F_max und Arbeit
-    create_work_interval_plots: bool = True  # Intervalle der Arbeit gemittelt
+    create_work_interval_plots: bool = True  # Arbeitsintervalle
     create_normalized_plots: bool = True  # Normierte Arbeitsplots
-    create_violin_plots: bool = False  # Violin-Plots
-    create_zscore_plots: bool = False  # Z-Score-Plots
+    create_violin_plots: bool = True  # Violin-Plots
+    create_zscore_plots: bool = True  # Z-Score-Plots
     
     # Export
     export_to_excel: bool = True
@@ -49,6 +50,7 @@ class MeasurementAnalyzer:
         self.stddev_normed_intervals = []  # Standardabweichungen
         self.rel_stddev_normed_intervals = []  # Relative Standardabweichungen
         self.force_moduli = []  # Liste für die Verbundmodule
+        self.area_normalized_works = []  #Liste für flächen normalisierte Auszugsarbeit
         self._update_mapping()
 
     def _update_mapping(self):
@@ -65,8 +67,9 @@ class MeasurementAnalyzer:
             'normed_intervals': self.normed_intervals,
             'mean_normed': self.mean_normed_intervals,
             'stddev_normed': self.stddev_normed_intervals,
+            'area_normalized_works': self.area_normalized_works,
             'rel_stddev_normed': self.rel_stddev_normed_intervals,
-            'force_modulus': self.force_moduli  # Neues Mapping für Verbundmodul
+            'force_modulus': self.force_moduli
         }
 
     def get_measurement_paths(self) -> list[Path]:
@@ -412,7 +415,7 @@ class MeasurementAnalyzer:
             }
         
         return statistics
-
+    
     def calculate_z_scores(self, data: list) -> dict:
         """Berechnet klassische und robuste Z-Scores für einen Datensatz.
         Args:
@@ -420,9 +423,12 @@ class MeasurementAnalyzer:
         Returns:
             Dictionary mit beiden Z-Score Arten und zusätzlichen Statistiken
         """
+        import numpy as np
+        
+        # Konvertiere zu NumPy-Array und entferne NaN-Werte
         data_array = np.array(data)
         data_array = data_array[~np.isnan(data_array)]
-
+        
         if len(data_array) < 2:
             print("Warnung: Zu wenige Datenpunkte für Z-Score Berechnung")
             return {
@@ -433,18 +439,18 @@ class MeasurementAnalyzer:
                 'median': 0,
                 'iqr': 0
             }
-
+        
         # Klassische Statistiken
         mean = np.mean(data_array)
         std = np.std(data_array)
         z_scores = np.zeros_like(data_array) if std == 0 else (data_array - mean) / std
-
+        
         # Robuste Statistiken
         median = np.median(data_array)
         iqr = np.percentile(data_array, 75) - np.percentile(data_array, 25)
         robust_scale = iqr / 1.349
         robust_z_scores = np.zeros_like(data_array) if robust_scale == 0 else (data_array - median) / robust_scale
-
+        
         return {
             'z_scores': z_scores,
             'robust_z_scores': robust_z_scores,
@@ -453,7 +459,7 @@ class MeasurementAnalyzer:
             'median': median,
             'iqr': iqr
         }
-
+    
     def get_z_score_data(self) -> dict:
         """
         Berechnet Z-Scores für alle relevanten Messgrößen.
@@ -461,9 +467,70 @@ class MeasurementAnalyzer:
         """
         return {
             'forces': self.calculate_z_scores(self.max_forces_data),
-            'works': self.calculate_z_scores(self.works)
+            'works': self.calculate_z_scores(self.works),
+            'ifss': self.calculate_z_scores(self.ifssvalues),
+            'area_normalized_works': self.calculate_z_scores(self.area_normalized_works)
         }
+    
+    def calculate_area_normalized_works(self):
+        """
+        Berechnet die flächennormierte Arbeit für jede Messung.
 
+        Die flächennormierte Arbeit wird berechnet als:
+        W_A-norm = W / (PI * d * l_e)
+
+        wobei:
+        - W: Arbeit [µJ]
+        - d: Faserdurchmesser [µm]
+        - l_e: Einbettlänge [µm]
+
+        Dies normiert die Arbeit auf die Mantelfläche und führt zu
+        Werten in der Einheit µJ/µm².
+        """
+        import math
+        
+        self.area_normalized_works = []  # Liste zurücksetzen
+        
+        # Überprüfen, ob alle benötigten Daten vorhanden sind
+        if not self.works or not self.fiberdiameters or not self.embeddinglengths:
+            print("Warnung: Fehlende Daten für flächennormierte Arbeitsberechnung")
+            return
+        
+        # Überprüfen, ob alle Listen die gleiche Länge haben
+        if len(self.works) != len(self.fiberdiameters) or len(self.works) != len(self.embeddinglengths):
+            print("Warnung: Ungleiche Längen der Datenlisten")
+            print(f"Arbeiten: {len(self.works)}, Durchmesser: {len(self.fiberdiameters)}, "
+                  f"Einbettlängen: {len(self.embeddinglengths)}")
+            return
+        
+        # Berechnung der flächennormierten Arbeit für jede Messung
+        for work, diameter, length in zip(self.works, self.fiberdiameters, self.embeddinglengths):
+            # Berechnung der Mantelfläche: PI * d * l_e
+            if diameter <= 0 or length <= 0:
+                print(f"Warnung: Ungültige Werte bei der Berechnung: d={diameter}, l_e={length}")
+                self.area_normalized_works.append(0.0)
+                continue
+            
+            surface_area = math.pi * diameter * length
+            
+            # Berechnung der flächennormierten Arbeit
+            area_norm_work = work / surface_area
+            
+            # Runden auf 4 Dezimalstellen und Speichern
+            self.area_normalized_works.append(round(area_norm_work, 4))
+        
+        print(f"\nFlächennormierte Arbeit berechnet: {len(self.area_normalized_works)} Werte")
+        if self.area_normalized_works:
+            mean_value = self.calculate_mean('area_normalized_works')
+            std_value = self.calculate_stddev('area_normalized_works')
+            print(f"Mittelwert: {mean_value:.4f} µJ/µm²")
+            print(f"Standardabweichung: {std_value:.4f} µJ/µm²")
+        
+        # Mapping aktualisieren
+        self._update_mapping()
+        
+        return self.area_normalized_works
+    
     def calculate_force_modulus(self) -> None:
         """
         Berechnet den Verbundmodul (force_modulus) für alle Messungen.

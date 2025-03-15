@@ -447,7 +447,7 @@ class StatisticalAnalyzer:
             import traceback
             self.logger.error(traceback.format_exc())
             return {'error': str(e)}
-
+    
     def visualize_anova_results(self, results: Dict[str, Any], variable_name: str, output_folder: Path) -> None:
         """
         Visualisiert die Ergebnisse einer ANOVA-Analyse.
@@ -459,38 +459,43 @@ class StatisticalAnalyzer:
         """
         # Stelle sicher, dass der Ausgabeordner existiert
         output_folder.mkdir(exist_ok=True, parents=True)
-
+        
         # Erstelle Boxplot der Gruppen
         plt.figure(figsize=(12, 8))
         sns.boxplot(x='group', y='value', data=results['df'])
         sns.stripplot(x='group', y='value', data=results['df'], color='black', size=4, alpha=0.7)
-
+        
         plt.title(f'Vergleich der Gruppen: {variable_name}', fontsize=16)
         plt.xlabel('Messreihe', fontsize=14)
         plt.ylabel(variable_name, fontsize=14)
+        
+        # X-Achsenbeschriftungen um 30° drehen für bessere Lesbarkeit
+        plt.xticks(rotation=30, ha='right', fontsize=12)
+        
         plt.grid(True, alpha=0.3)
-
+        
         # Füge ANOVA-Ergebnisse als Text hinzu
         anova_p = results['anova_table'].loc['group', 'PR(>F)']
         f_value = results['anova_table'].loc['group', 'F']
-
+        
         # Formatiere p-Wert
         if anova_p < 0.001:
             p_text = "p < 0.001"
         else:
             p_text = f"p = {anova_p:.3f}"
-
+        
         plt.figtext(0.15, 0.90, f"ANOVA: F = {f_value:.2f}, {p_text}", fontsize=12,
-                   bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.5'))
-
+                    bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.5'))
+        
         # Speichere den Plot
         out_path = output_folder / f"anova_boxplot_{variable_name}.png"
+        plt.tight_layout()
         plt.savefig(out_path, dpi=300, bbox_inches='tight')
         plt.close()
-
+        
         # Erstelle Plots für die ANOVA-Annahmen
         plt.figure(figsize=(14, 6))
-
+        
         # Residuen vs. Fitted Values Plot
         plt.subplot(1, 2, 1)
         plt.scatter(results['fitted_values'], results['residuals'])
@@ -499,26 +504,26 @@ class StatisticalAnalyzer:
         plt.xlabel('Fitted Values')
         plt.ylabel('Residuen')
         plt.grid(True, alpha=0.3)
-
+        
         # QQ-Plot der Residuen
         plt.subplot(1, 2, 2)
         stats.probplot(results['residuals'], dist="norm", plot=plt)
         plt.title('Q-Q Plot der Residuen')
         plt.grid(True, alpha=0.3)
-
+        
         # Speichere den Plot
         plt.tight_layout()
         out_path = output_folder / f"anova_assumptions_{variable_name}.png"
         plt.savefig(out_path, dpi=300, bbox_inches='tight')
         plt.close()
-
+        
         # Wenn Tukey-Post-hoc-Test durchgeführt wurde, zeige Ergebnisse
         if results['tukey_results'] is not None:
             # Erstelle einen Dataframe aus den Tukey-Ergebnissen
             tukey = results['tukey_results']
             tukey_df = pd.DataFrame(data=tukey._results_table.data[1:],
-                                  columns=tukey._results_table.data[0])
-
+                                    columns=tukey._results_table.data[0])
+            
             # Plotte die Ergebnisse
             plt.figure(figsize=(10, 6))
             sns.barplot(x='group1', y='meandiff', hue='reject', data=tukey_df)
@@ -526,15 +531,19 @@ class StatisticalAnalyzer:
             plt.title(f'Tukey HSD Post-hoc-Test: {variable_name}', fontsize=16)
             plt.xlabel('Gruppenvergleich', fontsize=14)
             plt.ylabel('Mittlere Differenz', fontsize=14)
+            
+            # X-Achsenbeschriftungen um 30° drehen für bessere Lesbarkeit
+            plt.xticks(rotation=30, ha='right', fontsize=12)
+            
             plt.legend(title='Signifikant (α=0.05)')
             plt.grid(True, alpha=0.3)
-
+            
             # Speichere den Plot
             plt.tight_layout()
             out_path = output_folder / f"anova_posthoc_{variable_name}.png"
             plt.savefig(out_path, dpi=300, bbox_inches='tight')
             plt.close()
-
+        
         self.logger.info(f"ANOVA-Plots für {variable_name} gespeichert in {output_folder}")
 
     def compare_groups(self,
