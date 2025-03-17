@@ -99,25 +99,25 @@ def process_single_series(
         analyzer.interfaceshearstrength()
         
         # Flächennormierte Arbeit berechnen, unabhängig von der Konfiguration
-        # Dies stellt sicher, dass die area_normalized_works Liste immer befüllt wird
-        print("\nBerechne flächennormierte Arbeit:")
-        analyzer.calculate_area_normalized_works()
-        
-        # Optionale Berechnungen basierend auf Konfiguration
-        if config.calculate_force_moduli:
-            analyzer.calculate_force_modulus()
-            print(f"Verbundmodul: {analyzer.calculate_mean('force_modulus'):.3f} ± "
-                  f"{analyzer.calculate_stddev('force_modulus'):.3f} N/µm")
-        
-        # Statistische Auswertungen
-        print("\nStatistische Auswertung:")
-        print(f"Maximalkräfte: {analyzer.calculate_mean('forces'):.2f} ± {analyzer.calculate_stddev('forces'):.2f} N")
-        print(
-            f"Einbettlängen: {analyzer.calculate_mean('lengths'):.2f} ± {analyzer.calculate_stddev('lengths'):.2f} µm")
-        print(
-            f"Faserdurchmesser: {analyzer.calculate_mean('diameters'):.2f} ± {analyzer.calculate_stddev('diameters'):.2f} µm")
-        print(f"IFSS: {analyzer.calculate_mean('ifss'):.2f} ± {analyzer.calculate_stddev('ifss'):.2f} MPa")
-        print(f"Arbeit: {analyzer.calculate_mean('works'):.2f} ± {analyzer.calculate_stddev('works'):.2f} µJ")
+        print("\n=== Berechnung der flächennormierten Arbeit ===")
+        try:
+            # Dies stellt sicher, dass die area_normalized_works Liste immer befüllt wird
+            area_norm_works = analyzer.calculate_area_normalized_works()
+            
+            # Ausgabe der Ergebnisse
+            if area_norm_works and len(area_norm_works) > 0:
+                mean_value = analyzer.calculate_mean('area_normalized_works')
+                std_value = analyzer.calculate_stddev('area_normalized_works')
+                print(f"✅ Flächennormierte Arbeit erfolgreich berechnet: {len(area_norm_works)} Werte")
+                print(f"   Mittelwert: {mean_value:.4f} µJ/µm²")
+                print(f"   Standardabweichung: {std_value:.4f} µJ/µm²")
+            else:
+                print("⚠️ Keine gültigen Werte für die flächennormierte Arbeit berechnet!")
+        except Exception as e:
+            print(f"❌ Fehler bei der Berechnung der flächennormierten Arbeit: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        print("=" * 45)
         
         # In der main.py, wo die anderen statistischen Ausgaben sind
         if config.calculate_work_intervals:
@@ -263,7 +263,7 @@ def main():
         )
         if analyzer:
             # Erstelle und zeige den Plot für die einzelne Messreihe
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(10, 7))
             colors = plt.cm.plasma(np.linspace(0, 1, len(analyzer.measurements_data)))
             
             for i, (measurement, color) in enumerate(zip(analyzer.measurements_data, colors)):
@@ -272,13 +272,13 @@ def main():
             
             plt.xlim(0, 1000)
             plt.ylim(0, 0.3)
-            plt.xticks(np.arange(0, 1001, 200), fontsize=12)
-            plt.yticks(np.arange(0, 0.31, 0.05), fontsize=12)
+            plt.xticks(np.arange(0, 1001, 200), fontsize=26, fontweight='bold')
+            plt.yticks(np.arange(0, 0.31, 0.05), fontsize=26, fontweight='bold')
             
-            plt.title("Auszugskurven", fontsize=14, fontweight='bold')
-            plt.xlabel('Weg [µm]', fontsize=12)
-            plt.ylabel('Kraft [N]', fontsize=12)
-            plt.legend()
+            #plt.title("Auszugskurven", fontsize=14, fontweight='bold')
+            plt.xlabel('Displacement [µm]', fontsize=30, fontweight='bold')
+            plt.ylabel('Force [N]', fontsize=30, fontweight='bold')
+            #plt.legend()
             plt.grid(True)
             
             # Zeige den Plot an

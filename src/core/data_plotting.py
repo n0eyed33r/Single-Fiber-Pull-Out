@@ -13,6 +13,17 @@ class DataPlotter:
         plt.rcParams['axes.linewidth'] = 3
         plt.rcParams['xtick.major.width'] = 3
         plt.rcParams['ytick.major.width'] = 3
+        
+        # Verwende nur EINEN Layout-Manager
+        plt.rcParams['figure.autolayout'] = False  # Deaktiviere autolayout
+        plt.rcParams['figure.constrained_layout.use'] = False  # Deaktiviere constrained_layout
+        
+        # Setze größere Schriftarten als Standard
+        plt.rcParams['font.size'] = 28
+        plt.rcParams['axes.labelsize'] = 34
+        plt.rcParams['axes.titlesize'] = 34
+        plt.rcParams['xtick.labelsize'] = 30
+        plt.rcParams['ytick.labelsize'] = 30
     
     @staticmethod
     def save_plots_for_series(analyzers_dict: dict, plots_folder: Path):
@@ -23,34 +34,43 @@ class DataPlotter:
         DataPlotter.setup_plot_style()  # Setze Grundstil
         
         for name, analyzer in analyzers_dict.items():
-            plt.figure(figsize=(10, 8))
+            # Erstelle Figur und Achsenobjekt
+            fig, ax = plt.subplots(figsize=(12, 9), constrained_layout=True)
             
             # Plot jede Messung mit einer Farbe aus dem Plasma-Schema
             for i, (measurement, color) in enumerate(zip(analyzer.measurements_data, colors)):
                 distances, forces = zip(*measurement)
-                plt.plot(distances, forces, color=color, label=f'Messung {i + 1}')
+                ax.plot(distances, forces, color=color, label=f'Messung {i + 1}')
             
-            # Achsenlimits und Ticks setzen
-            plt.xlim(0, 1000)
-            plt.ylim(0, 0.3)
-            plt.xticks(np.arange(0, 1001, 200), fontsize=22, fontweight='bold')
-            plt.yticks(np.arange(0, 0.31, 0.05), fontsize=22, fontweight='bold')
+            # Achsenlimits setzen
+            ax.set_xlim(0, 1000)
+            ax.set_ylim(0, 0.3)
             
-            # Beschriftungen
-            # plt.title(name, fontsize=24, fontweight='bold')
-            plt.xlabel('Displacement [µm]', fontsize=24, fontweight='bold')
-            plt.ylabel('Force [N]', fontsize=24, fontweight='bold')
-            # Ersetze Unterstriche im Titel durch Leerzeichen
-            title = name.replace('_', ' ')
-            # plt.title(title)
+            # Tick-Positionen setzen
+            ax.set_xticks(np.arange(0, 1001, 200))
+            ax.set_yticks(np.arange(0, 0.31, 0.05))
             
-            # plt.legend()
-            plt.grid(True)
+            # Formatierung der Ticks und Labels
+            ax.tick_params(axis='both', which='major', pad=2)
+            
+            # Fettdruck für die Tick-Labels
+            for label in ax.get_xticklabels() + ax.get_yticklabels():
+                label.set_fontweight('bold')
+            
+            # Achsenbeschriftungen
+            ax.set_xlabel('Displacement [µm]', fontweight='bold', labelpad=2)
+            ax.set_ylabel('Force [N]', fontweight='bold', labelpad=2)
+            
+            # Gitter hinzufügen
+            ax.grid(True)
+            
+            # Optimiere Layout
+            fig.tight_layout(pad=2.0)
             
             # Speichere Plot
             plot_path = plots_folder / f"{name}_plot.png"
-            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            plt.close()
+            fig.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close(fig)
     
     @staticmethod
     def create_work_interval_plots(analyzers_dict: dict, plots_folder: Path):

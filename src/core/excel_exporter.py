@@ -56,16 +56,24 @@ class ExcelExporter:
             self.results['Force Modulus_std [N/µm]'].append(analyzer.calculate_stddev('force_modulus'))
             
             # Flächennormierte Arbeitswerte prüfen und hinzufügen
-            # Immer einen Wert hinzufügen, auch wenn es 0 oder NaN ist
+            print(f"\nFüge flächennormierte Arbeitsdaten für Messreihe '{name}' hinzu:")
             if hasattr(analyzer, 'area_normalized_works') and analyzer.area_normalized_works:
-                # Wenn Daten vorhanden sind, füge den Mittelwert und die Standardabweichung hinzu
-                self.results['Flächennormierte Arbeit [µJ/µm²]'].append(
-                    analyzer.calculate_mean('area_normalized_works'))
-                self.results['Flächennormierte Arbeit_std [µJ/µm²]'].append(
-                    analyzer.calculate_stddev('area_normalized_works'))
+                # Prüfe, ob gültige Werte enthalten sind (nicht NaN)
+                valid_data = [x for x in analyzer.area_normalized_works if not np.isnan(x)]
+                
+                if valid_data:
+                    print(f"  {len(valid_data)} gültige Werte gefunden")
+                    self.results['Flächennormierte Arbeit [µJ/µm²]'].append(
+                        analyzer.calculate_mean('area_normalized_works'))
+                    self.results['Flächennormierte Arbeit_std [µJ/µm²]'].append(
+                        analyzer.calculate_stddev('area_normalized_works'))
+                else:
+                    print("  Keine gültigen Werte gefunden, füge NaN ein")
+                    self.results['Flächennormierte Arbeit [µJ/µm²]'].append(np.nan)
+                    self.results['Flächennormierte Arbeit_std [µJ/µm²]'].append(np.nan)
             else:
                 # Wenn keine Daten vorhanden sind, füge NaN hinzu
-                import numpy as np
+                print("  Keine flächennormierten Arbeitsdaten vorhanden, füge NaN ein")
                 self.results['Flächennormierte Arbeit [µJ/µm²]'].append(np.nan)
                 self.results['Flächennormierte Arbeit_std [µJ/µm²]'].append(np.nan)
             
