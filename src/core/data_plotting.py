@@ -26,8 +26,15 @@ class DataPlotter:
         plt.rcParams['ytick.labelsize'] = 30
     
     @staticmethod
-    def save_plots_for_series(analyzers_dict: dict, plots_folder: Path):
-        """Erstellt und speichert Plots für alle Messreihen."""
+    def save_plots_for_series(analyzers_dict: dict, plots_folder: Path, max_embedding_length: float = 1000.0):
+        """
+        Erstellt und speichert Plots für alle Messreihen.
+
+        Args:
+            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+            plots_folder: Ordner zum Speichern der Plots
+            max_embedding_length: Maximale Einbetttiefe für die Achsenskalierung
+        """
         # Verwende Plasma-Farbschema
         colors = plt.cm.plasma(np.linspace(0, 1, 10))  # 10 Farben aus dem Plasma-Schema
         
@@ -42,12 +49,13 @@ class DataPlotter:
                 distances, forces = zip(*measurement)
                 ax.plot(distances, forces, color=color, label=f'Messung {i + 1}')
             
-            # Achsenlimits setzen
-            ax.set_xlim(0, 1000)
+            # Achsenlimits setzen basierend auf der konfigurierten Einbetttiefe
+            ax.set_xlim(0, max_embedding_length)
             ax.set_ylim(0, 0.3)
             
             # Tick-Positionen setzen
-            ax.set_xticks(np.arange(0, 1001, 200))
+            tick_step = max_embedding_length / 5  # 5 Ticks auf der x-Achse
+            ax.set_xticks(np.arange(0, max_embedding_length + 1, tick_step))
             ax.set_yticks(np.arange(0, 0.31, 0.05))
             
             # Formatierung der Ticks und Labels

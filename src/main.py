@@ -1,5 +1,5 @@
 # src/main.py
-from src.core.data_statistics import MeasurementAnalyzer
+from src.core.data_statistics import MeasurementAnalyzer, AnalysisConfig
 from src.core.file_handler import FileHandler
 from src.core.data_sorter import DataSorter
 from src.utils.debug_printer import DebugPrinter
@@ -7,40 +7,11 @@ from src.utils.logger_setup import LoggerSetup
 from src.core.data_plotting import DataPlotter
 from src.core.excel_exporter import ExcelExporter
 from src.config.settings import naming_storage
-from src.core.statistical_analysis import StatisticalAnalyzer  # Neu importiert
+from src.core.statistical_analysis import StatisticalAnalyzer
 from pathlib import Path
-from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Optional, Dict
-
-
-@dataclass
-class AnalysisConfig:
-    """Konfigurationsklasse für die Steuerung der Analyseschritte"""
-    # Berechnungen
-    calculate_zscores: bool = True
-    calculate_force_moduli: bool = True
-    calculate_work_intervals: bool = True
-    calculate_area_normalized_works: bool = True  # Neue Option
-    
-    # Statistische Analysen
-    perform_bootstrap: bool = False  # Option für Bootstrap
-    perform_anova: bool = False  # Option für ANOVA
-    bootstrap_samples: int = 1000  # Anzahl der Bootstrap-Stichproben
-    anova_target_size: int = 10  # Zielgröße für ANOVA-Bootstrap
-    
-    # Plot-Erstellung
-    create_standard_plots: bool = True  # Kraft-Weg-Diagramme
-    create_boxplots: bool = True  # Boxplots für F_max und Arbeit
-    create_work_interval_plots: bool = True
-    create_normalized_plots: bool = True  # Normierte Arbeitsplots
-    create_violin_plots: bool = True  # Violin-Plots
-    create_zscore_plots: bool = True  # Z-Score-Plots
-    create_statistical_plots: bool = True  # Option für statistische Plots
-    
-    # Export
-    export_to_excel: bool = True
 
 
 def process_single_series(
@@ -84,6 +55,9 @@ def process_single_series(
         
         # Analyse durchführen
         analyzer = MeasurementAnalyzer()
+        # Setze die konfigurierte maximale Einbetttiefe
+        analyzer.max_allowed_length = config.max_embedding_length
+        
         paths = analyzer.get_measurement_paths()
         print(f"Gefundene Messpfade: {len(paths)}")
         
@@ -95,14 +69,16 @@ def process_single_series(
         analyzer.check_data_consistency()
         analyzer.find_all_max_forces()
         analyzer.find_all_embeddinglengths()
-        analyzer.calculate_all_works()
+        
+        # Verwende die konfigurierte Einbetttiefe für die Berechnungen
+        analyzer.calculate_all_works(max_allowed_length=config.max_embedding_length)
         analyzer.interfaceshearstrength()
         
         # Flächennormierte Arbeit berechnen, unabhängig von der Konfiguration
         print("\n=== Berechnung der flächennormierten Arbeit ===")
         try:
             # Dies stellt sicher, dass die area_normalized_works Liste immer befüllt wird
-            area_norm_works = analyzer.calculate_area_normalized_works()
+            area_norm_works = analyzer.calculate_area_normalized_works(max_allowed_length=config.max_embedding_length)
             
             # Ausgabe der Ergebnisse
             if area_norm_works and len(area_norm_works) > 0:
@@ -132,7 +108,8 @@ def process_single_series(
         
         # Optionale Arbeitsberechnungen
         if config.calculate_work_intervals:
-            analyzer.calculate_all_work_intervals()
+            # Übergebe die konfigurierte Einbetttiefe
+            analyzer.calculate_all_work_intervals(max_allowed_length=config.max_embedding_length)
             print("\nArbeitsintervalle:")
             for i, intervals in enumerate(analyzer.work_intervals, 1):
                 print(f"Messung {i}: {intervals}")
@@ -212,23 +189,37 @@ def main():
     # Analysetyp wählen
     analysis_type = FileHandler.select_analysis_type()
     
+    # Standardeinstellungen für Einbetttiefe
+    max_embedding_length = 1000.0
+    
+    # Dictionary für Analyseoptionen initialisieren - immer ein gültiges Standardwerte-Dictionary
+    analysis_options = {
+        "max_embedding_length": max_embedding_length,
+        "perform_bootstrap": False,
+        "perform_anova": False,
+        "bootstrap_samples": 1000,
+        "anova_target_size": 10,
+        "create_statistical_plots": True
+    }
+    
     # Statistische Optionen wählen
     if analysis_type == '2':  # Nur für Mehrfachanalyse statistische Optionen anbieten
-        logger.info("Statistische Analyseoptionen auswählen")
-        stat_options = FileHandler.select_statistical_options()  # Verwende FileHandler
-        logger.info(f"Gewählte statistische Optionen: {stat_options}")
-    else:
-        # Standard-Optionen für Einzelanalyse (keine statistische Analyse)
-        stat_options = {
-            "perform_bootstrap": False,
-            "perform_anova": False,
-            "bootstrap_samples": 1000,
-            "anova_target_size": 10,
-            "create_statistical_plots": True
-        }
+        logger.info("Analyseoptionen auswählen")
+        user_options = FileHandler.select_statistical_options()  # Verwende FileHandler
+        
+        # Aktualisiere Optionen nur, wenn gültige Werte zurückgegeben wurden
+        if user_options:
+            analysis_options.update(user_options)
+        
+        logger.info(f"Gewählte Analyseoptionen: {analysis_options}")
+        
+        # Aktualisiere die Einbetttiefe mit dem aktuellen Wert aus den Optionen
+        max_embedding_length = analysis_options["max_embedding_length"]
+        logger.info(f"Gewählte maximale Einbetttiefe: {max_embedding_length} µm")
     
     # Konfigurationen definieren
     quick_test_config = AnalysisConfig(
+        max_embedding_length=max_embedding_length,  # Neue Konfigurationseinstellung
         calculate_zscores=False,
         calculate_force_moduli=True,
         calculate_work_intervals=True,
@@ -245,13 +236,15 @@ def main():
     
     # Vollständige Konfiguration für Mehrfachanalyse mit statistischen Optionen
     full_analysis_config = AnalysisConfig(
+        # Neue Konfiguration für Einbetttiefe
+        max_embedding_length=max_embedding_length,
         # Alle grundlegenden Optionen standardmäßig True
         # Füge statistische Optionen hinzu
-        perform_bootstrap=stat_options.get("perform_bootstrap", False),
-        perform_anova=stat_options.get("perform_anova", False),
-        bootstrap_samples=stat_options.get("bootstrap_samples", 1000),
-        anova_target_size=stat_options.get("anova_target_size", 10),
-        create_statistical_plots=stat_options.get("create_statistical_plots", True)
+        perform_bootstrap=analysis_options["perform_bootstrap"],
+        perform_anova=analysis_options["perform_anova"],
+        bootstrap_samples=analysis_options["bootstrap_samples"],
+        anova_target_size=analysis_options["anova_target_size"],
+        create_statistical_plots=analysis_options["create_statistical_plots"]
     )
     
     if analysis_type == '1':
@@ -270,15 +263,16 @@ def main():
                 distances, forces = zip(*measurement)
                 plt.plot(distances, forces, color=color, label=f'Messung {i + 1}')
             
-            plt.xlim(0, 1000)
+            # Verwende die konfigurierte maximale Einbetttiefe
+            plt.xlim(0, quick_test_config.max_embedding_length)
             plt.ylim(0, 0.3)
-            plt.xticks(np.arange(0, 1001, 200), fontsize=26, fontweight='bold')
+            plt.xticks(
+                np.arange(0, quick_test_config.max_embedding_length + 1, quick_test_config.max_embedding_length / 5),
+                fontsize=26, fontweight='bold')
             plt.yticks(np.arange(0, 0.31, 0.05), fontsize=26, fontweight='bold')
             
-            #plt.title("Auszugskurven", fontsize=14, fontweight='bold')
             plt.xlabel('Displacement [µm]', fontsize=30, fontweight='bold')
             plt.ylabel('Force [N]', fontsize=30, fontweight='bold')
-            #plt.legend()
             plt.grid(True)
             
             # Zeige den Plot an
@@ -346,7 +340,12 @@ def main():
                     if full_analysis_config.create_standard_plots:
                         standard_plots_folder = plots_base_folder / "kraft_weg-plots"
                         standard_plots_folder.mkdir(exist_ok=True)
-                        DataPlotter.save_plots_for_series(analyzers_dict, standard_plots_folder)
+                        # Übergebe die maximale Einbetttiefe an die Plot-Funktion
+                        DataPlotter.save_plots_for_series(
+                            analyzers_dict,
+                            standard_plots_folder,
+                            max_embedding_length=full_analysis_config.max_embedding_length
+                        )
                     
                     if full_analysis_config.create_boxplots:
                         boxplots_folder = plots_base_folder / "box_plots"

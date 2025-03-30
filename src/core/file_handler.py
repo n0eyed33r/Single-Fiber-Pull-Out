@@ -99,18 +99,19 @@ class FileHandler:
     @staticmethod
     def select_statistical_options():
         """
-        Zeigt ein Fenster zur Auswahl statistischer Analysemethoden (Bootstrap und ANOVA).
+        Zeigt ein Fenster zur Auswahl statistischer Analysemethoden (Bootstrap und ANOVA)
+        sowie zur Eingabe der maximalen Einbetttiefe.
 
         Returns:
             dict: Dictionary mit den ausgewählten Optionen
         """
         # Erstelle das Hauptfenster
         root = tk.Tk()
-        root.title("SFPO Analyzer - Statistische Methoden")
+        root.title("SFPO Analyzer - Analyseoptionen")
         
         # Zentriere das Fenster
         window_width = 450
-        window_height = 350
+        window_height = 600  # Etwas größer für zusätzliches Feld
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
         x = (screen_width / 2) - (window_width / 2)
@@ -122,6 +123,7 @@ class FileHandler:
         root.attributes('-topmost', True)
         
         # Erstelle Variablen für die Optionen
+        max_embedding_length = tk.DoubleVar(value=1000.0)  # Neue Variable für Einbetttiefe
         perform_bootstrap = tk.BooleanVar(value=False)
         perform_anova = tk.BooleanVar(value=False)
         bootstrap_samples = tk.IntVar(value=1000)
@@ -138,10 +140,40 @@ class FileHandler:
         # Überschrift
         header_label = tk.Label(
             main_frame,
-            text="Statistische Analyse-Optionen",
+            text="Analyseoptionen für SFPO",
             font=("Helvetica", 14, "bold")
         )
         header_label.pack(pady=(0, 15))
+        
+        # Einbetttiefe-Bereich (neu hinzugefügt)
+        embedding_frame = tk.Frame(main_frame)
+        embedding_frame.pack(fill=tk.X, pady=10, anchor=tk.W)
+        
+        embedding_label = tk.Label(
+            embedding_frame,
+            text="Maximale Einbetttiefe [µm]:",
+            font=("Helvetica", 10, "bold")
+        )
+        embedding_label.pack(side=tk.LEFT, padx=(0, 5))
+        
+        embedding_entry = tk.Entry(
+            embedding_frame,
+            textvariable=max_embedding_length,
+            width=8
+        )
+        embedding_entry.pack(side=tk.LEFT)
+        
+        # Trennlinie
+        separator = tk.Frame(main_frame, height=2, bd=1, relief=tk.SUNKEN)
+        separator.pack(fill=tk.X, padx=5, pady=10)
+        
+        # Überschrift für statistische Optionen
+        stats_label = tk.Label(
+            main_frame,
+            text="Statistische Analyse-Optionen",
+            font=("Helvetica", 12, "bold")
+        )
+        stats_label.pack(pady=(0, 10))
         
         # Bootstrap-Bereich
         bootstrap_frame = tk.Frame(main_frame)
@@ -217,7 +249,8 @@ class FileHandler:
         
         # Informationstext
         info_text = (
-            "Hinweis: Bootstrap und ANOVA sind rechenintensive Verfahren, "
+            "Hinweis: Die Einbetttiefe begrenzt die maximale Auswertungslänge der Messungen. "
+            "Bootstrap und ANOVA sind rechenintensive Verfahren, "
             "die bei großen Datensätzen längere Zeit in Anspruch nehmen können."
         )
         
@@ -236,6 +269,7 @@ class FileHandler:
         button_frame.pack(fill=tk.X, pady=10)
         
         def on_continue():
+            result_dict["max_embedding_length"] = max_embedding_length.get()
             result_dict["perform_bootstrap"] = perform_bootstrap.get()
             result_dict["perform_anova"] = perform_anova.get()
             result_dict["bootstrap_samples"] = bootstrap_samples.get()
@@ -244,7 +278,8 @@ class FileHandler:
             root.destroy()
         
         def on_cancel():
-            # Bei Abbruch setzen wir Standardwerte (keine statistischen Analysen)
+            # Bei Abbruch setzen wir Standardwerte
+            result_dict["max_embedding_length"] = 1000.0
             result_dict["perform_bootstrap"] = False
             result_dict["perform_anova"] = False
             result_dict["bootstrap_samples"] = 1000
@@ -282,6 +317,7 @@ class FileHandler:
         if not result_dict:
             # Falls das Fenster geschlossen wurde (X-Button), geben wir Standardwerte zurück
             return {
+                "max_embedding_length": 1000.0,
                 "perform_bootstrap": False,
                 "perform_anova": False,
                 "bootstrap_samples": 1000,

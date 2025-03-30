@@ -15,11 +15,20 @@ from dataclasses import dataclass
 @dataclass
 class AnalysisConfig:
     """Konfigurationsklasse für die Steuerung der Analyseschritte"""
+    # Messparameter
+    max_embedding_length: float = 1000.0  # Maximale Einbetttiefe in µm (Standardwert)
+    
     # Berechnungen
     calculate_zscores: bool = True
     calculate_force_moduli: bool = True
     calculate_work_intervals: bool = True
     calculate_area_normalized_works: bool = True
+    
+    # Statistische Analysen
+    perform_bootstrap: bool = False  # Option für Bootstrap
+    perform_anova: bool = False  # Option für ANOVA
+    bootstrap_samples: int = 1000  # Anzahl der Bootstrap-Stichproben
+    anova_target_size: int = 10  # Zielgröße für ANOVA-Bootstrap
     
     # Plot-Erstellung
     create_standard_plots: bool = True  # Kraft-Weg-Diagramme
@@ -28,6 +37,7 @@ class AnalysisConfig:
     create_normalized_plots: bool = True  # Normierte Arbeitsplots
     create_violin_plots: bool = True  # Violin-Plots
     create_zscore_plots: bool = True  # Z-Score-Plots
+    create_statistical_plots: bool = True  # Option für statistische Plots
     
     # Export
     export_to_excel: bool = True
@@ -37,7 +47,7 @@ class MeasurementAnalyzer:
     """
     All calculations and statistical evaluations are performed in this class.
     """
-    def __init__(self):
+    def __init__(self, max_allowed_length: float = 1000.0):
         self.measurements_data = []  # Liste für alle Messungen
         self.max_forces_data = []  # Liste aller Maximalkräfter jeder erfolgreichen Messung
         self.embeddinglengths = []  # Liste aller Einbettlängen
@@ -50,7 +60,8 @@ class MeasurementAnalyzer:
         self.stddev_normed_intervals = []  # Standardabweichungen
         self.rel_stddev_normed_intervals = []  # Relative Standardabweichungen
         self.force_moduli = []  # Liste für die Verbundmodule
-        self.area_normalized_works = []  #Liste für flächen normalisierte Auszugsarbeit
+        self.area_normalized_works = []  # Liste für flächen normalisierte Auszugsarbeit
+        self.max_allowed_length = max_allowed_length  # Neue Variable für max. Einbetttiefe
         self._update_mapping()
 
     def _update_mapping(self):
@@ -95,7 +106,7 @@ class MeasurementAnalyzer:
         # Datenbereinigung
         df = df[
             (df["Displacement"] > 0) &
-            (df["Displacement"] < 1000) &
+            (df["Displacement"] < self.max_allowed_length) &  # Verwende konfigurierbare Einbetttiefe
             (df["Force"] >= 0)]
         return list(zip(df["Displacement"], df["Force"]))
 
@@ -135,14 +146,20 @@ class MeasurementAnalyzer:
             self.max_forces_data.append(max_force)
 
     def find_single_embeddinglength(self, measurement: list[tuple[float, float]]) -> float:
+        """
+        Ermittelt die Einbettlänge einer einzelnen Messung basierend auf der maximalen Verschiebung.
+        Berücksichtigt die konfigurierte maximale Einbetttiefe.
+        """
         # erstelle Liste mit Distanzwerten
-        # Jedes Tupel hat (distance, force) == ([0],[1]), wir wollen nur force, also Index 0
         distance = [point[0] for point in measurement]
-        # Finde das Maximum
-        embeddinglength = max(distance)
+        # Finde das Maximum und begrenze es auf die erlaubte maximale Länge
+        embeddinglength = min(max(distance), self.max_allowed_length)
         return embeddinglength
 
     def find_all_embeddinglengths(self):
+        """
+        Ermittelt die Einbettlängen für alle Messungen und speichert sie in self.embeddinglengths.
+        """
         for measurement in self.measurements_data:
             max_distance = self.find_single_embeddinglength(measurement)
             self.embeddinglengths.append(max_distance)
@@ -222,97 +239,91 @@ class MeasurementAnalyzer:
                 self.ifssvalues.append(round(ifss, 2))
             except Exception as e:
                 print(f"Fehler bei Messung {i}: {e}")
-
-    def calculate_single_work(self, measurement: list[tuple[float, float]], embedding_length: float) -> float:
+    
+    def calculate_single_work(self, measurement: list[tuple[float, float]], embedding_length: float,
+                              max_allowed_length: float = None) -> float:
         """
         Berechnet die verrichtete Arbeit für eine einzelne Messung durch Integration.
         Args: measurement: Liste von (distance, force) Tupeln einer Messung
             embedding_length: Maximale Einbettlänge für diese Messung
+            max_allowed_length: Konfigurierbare maximale Einbetttiefe (Optional)
         Returns: float: Berechnete Arbeit in µJ (Mikro-Joule)
         """
+        # Wenn keine maximale Länge angegeben wurde, verwende die Klassenvariable
+        if max_allowed_length is None:
+            max_allowed_length = self.max_allowed_length
+            
         # Extrahiere Weg- und Kraftwerte aus den Tupeln
         distances = [point[0] for point in measurement]
         forces = [point[1] for point in measurement]
         # Konvertiere zu NumPy Arrays für effiziente Berechnung
         distance_array = np.array(distances)
         force_array = np.array(forces)
-
-        # Begrenze embedding_length auf 1000 µm
-        max_allowed_length = 1000.0
+        
+        # Begrenze embedding_length auf die konfigurierte maximale Länge
         embedding_length = min(embedding_length, max_allowed_length)
         # Beschränke die Daten auf den Bereich bis zur Einbettlänge
         mask = distance_array <= embedding_length
         limited_distances = distance_array[mask]
         limited_forces = force_array[mask]
-
+        
         # Sicherheitsprüfung der Datenlängen
         if len(limited_distances) != len(limited_forces):
             raise ValueError("Ungleiche Anzahl von Weg- und Kraftwerten nach Längenbegrenzung")
         # Berechne das Integral (Arbeit)
         work = np.trapezoid(limited_forces, limited_distances)
         return round(work, 3)
-
-    def calculate_all_works(self):
+    
+    def calculate_all_works(self, max_allowed_length: float = None):
         """
         Berechnet die verrichtete Arbeit für alle Messungen.
         Speichert die Ergebnisse in self.works für weitere Berechnungen.
+
+        Args:
+            max_allowed_length: Maximale Einbetttiefe (µm), wenn None wird self.max_allowed_length verwendet
         """
+        # Verwende die übergebene maximale Länge oder die Klassenvariable
+        if max_allowed_length is None:
+            max_allowed_length = self.max_allowed_length
+        
         # Initialisiere die Liste für die Arbeitswerte
         self.works = []
         # Für jede Messung die Arbeit berechnen
         for measurement, embedding_length in zip(self.measurements_data, self.embeddinglengths):
             try:
-                work = self.calculate_single_work(measurement, embedding_length)
+                work = self.calculate_single_work(measurement, embedding_length, max_allowed_length)
                 self.works.append(work)
             except Exception as e:
                 print(f"Fehler bei der Arbeitsberechnung: {e}")
         # Aktualisiere das Mapping für statistische Berechnungen
         self.data_mapping.update({'works': self.works})
-
-    def calculate_mean(self, data_type: str) -> float:
-        """Berechnet den Mittelwert für einen bestimmten Datentyp."""
-        # Aktualisiere das Mapping mit den aktuellen Listen
-        self._update_mapping()
-        if data_type not in self.data_mapping:
-            raise ValueError(f"Unbekannter Datentyp: {data_type}")
-        data = self.data_mapping[data_type]
-        if not data:
-            print("Warnung: Keine Daten in der Liste!")
-            return 0.0
-        result = float(np.mean(data))
-        print(f"Berechneter Mittelwert: {result}")
-        return result
-
-    def calculate_stddev(self, data_type: str) -> float:
-        """ berechne die Standardabweichung
-        """
-        self._update_mapping()  # Mapping aktualisieren
-        if data_type not in self.data_mapping:
-            raise ValueError(f"Unbekannter Datentyp: {data_type}")
-        data = self.data_mapping[data_type]
-        if not data:
-            return 0.0
-        return float(np.std(data))
-
+    
     def calculate_single_work_intervals(self, measurement: list[tuple[float, float]],
-                                        embedding_length: float) -> list[float]:
+                                        embedding_length: float, max_allowed_length: float = None) -> list[float]:
         """
         Berechnet die Arbeit in 10 gleichen Intervallen für eine einzelne Messung.
         Args:   measurement: Liste von (distance, force) Tupeln einer Messung
                 embedding_length: Maximale Einbettlänge für diese Messung
+                max_allowed_length: Konfigurierbare maximale Einbetttiefe (Optional)
         Returns:Liste mit 10 Arbeitswerten, einer für jedes 10%-Intervall
         """
+        # Wenn keine maximale Länge angegeben wurde, verwende die Klassenvariable
+        if max_allowed_length is None:
+            max_allowed_length = self.max_allowed_length
+            
         # Extrahiere Weg- und Kraftwerte
         distances = np.array([point[0] for point in measurement])
         forces = np.array([point[1] for point in measurement])
-        # Begrenze embedding_length auf 1000 µm
-        max_allowed_length = 1000.0
+        
+        # Begrenze embedding_length auf die konfigurierte maximale Länge
         embedding_length = min(embedding_length, max_allowed_length)
+        
         # Beschränke auf Einbettlänge
         mask = distances <= embedding_length
         limited_distances = distances[mask]
         limited_forces = forces[mask]
         interval_works = []
+        
         # Berechne Arbeit für jedes 10%-Intervall
         for k in range(10):
             start_percent = k * 10
@@ -332,13 +343,22 @@ class MeasurementAnalyzer:
             else:
                 interval_works.append(0.0)
         return interval_works
+    
+    def calculate_all_work_intervals(self, max_allowed_length: float = None):
+        """
+        Berechnet die Arbeitsintervalle für alle Messungen.
 
-    def calculate_all_work_intervals(self):
-        """Berechnet die Arbeitsintervalle für alle Messungen."""
+        Args:
+            max_allowed_length: Maximale Einbetttiefe (µm), wenn None wird self.max_allowed_length verwendet
+        """
+        # Verwende die übergebene maximale Länge oder die Klassenvariable
+        if max_allowed_length is None:
+            max_allowed_length = self.max_allowed_length
+        
         self.work_intervals = []  # Liste zurücksetzen
         for measurement, embedding_length in zip(self.measurements_data, self.embeddinglengths):
             try:
-                intervals = self.calculate_single_work_intervals(measurement, embedding_length)
+                intervals = self.calculate_single_work_intervals(measurement, embedding_length, max_allowed_length)
                 self.work_intervals.append(intervals)
             except Exception as e:
                 print(f"Fehler bei der Intervallberechnung: {e}")
@@ -416,6 +436,31 @@ class MeasurementAnalyzer:
         
         return statistics
     
+    def calculate_mean(self, data_type: str) -> float:
+        """Berechnet den Mittelwert für einen bestimmten Datentyp."""
+        # Aktualisiere das Mapping mit den aktuellen Listen
+        self._update_mapping()
+        if data_type not in self.data_mapping:
+            raise ValueError(f"Unbekannter Datentyp: {data_type}")
+        data = self.data_mapping[data_type]
+        if not data:
+            print("Warnung: Keine Daten in der Liste!")
+            return 0.0
+        result = float(np.mean(data))
+        print(f"Berechneter Mittelwert: {result}")
+        return result
+
+    def calculate_stddev(self, data_type: str) -> float:
+        """ berechne die Standardabweichung
+        """
+        self._update_mapping()  # Mapping aktualisieren
+        if data_type not in self.data_mapping:
+            raise ValueError(f"Unbekannter Datentyp: {data_type}")
+        data = self.data_mapping[data_type]
+        if not data:
+            return 0.0
+        return float(np.std(data))
+    
     def calculate_z_scores(self, data: list) -> dict:
         """Berechnet klassische und robuste Z-Scores für einen Datensatz.
         Args:
@@ -472,7 +517,7 @@ class MeasurementAnalyzer:
             'area_normalized_works': self.calculate_z_scores(self.area_normalized_works)
         }
     
-    def calculate_area_normalized_works(self):
+    def calculate_area_normalized_works(self, max_allowed_length: float = None):
         """
         Berechnet die flächennormierte Arbeit für jede Messung.
 
@@ -486,8 +531,15 @@ class MeasurementAnalyzer:
 
         Dies normiert die Arbeit auf die Mantelfläche und führt zu
         Werten in der Einheit µJ/µm².
+
+        Args:
+            max_allowed_length: Maximale Einbetttiefe (µm), wenn None wird self.max_allowed_length verwendet
         """
         import math
+        
+        # Verwende die übergebene maximale Länge oder die Klassenvariable
+        if max_allowed_length is None:
+            max_allowed_length = self.max_allowed_length
         
         self.area_normalized_works = []  # Liste zurücksetzen
         
@@ -505,6 +557,9 @@ class MeasurementAnalyzer:
         
         # Berechnung der flächennormierten Arbeit für jede Messung
         for work, diameter, length in zip(self.works, self.fiberdiameters, self.embeddinglengths):
+            # Begrenze die Einbettlänge auf die maximale Länge
+            length = min(length, max_allowed_length)
+            
             # Berechnung der Mantelfläche: PI * d * l_e
             if diameter <= 0 or length <= 0:
                 print(f"Warnung: Ungültige Werte bei der Berechnung: d={diameter}, l_e={length}")
