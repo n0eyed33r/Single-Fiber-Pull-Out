@@ -95,6 +95,66 @@ def process_single_series(
             traceback.print_exc()
         print("=" * 45)
         
+        # Berechnung der Arbeitssegmente (vor und nach F_max)
+        print("\n=== Berechnung der Arbeitssegmente (vor und nach F_max) ===")
+        try:
+            analyzer.calculate_all_work_segments(max_allowed_length=config.max_embedding_length)
+            
+            # Ausgabe der Ergebnisse
+            if analyzer.work_before_fmax and len(analyzer.work_before_fmax) > 0:
+                mean_before = analyzer.calculate_mean('work_before_fmax')
+                std_before = analyzer.calculate_stddev('work_before_fmax')
+                mean_after = analyzer.calculate_mean('work_after_fmax')
+                std_after = analyzer.calculate_stddev('work_after_fmax')
+                
+                print(f"✅ Arbeitssegmente erfolgreich berechnet: {len(analyzer.work_before_fmax)} Werte")
+                print(f"   Arbeit bis F_max: Mittelwert: {mean_before:.4f} µJ, Standardabweichung: {std_before:.4f} µJ")
+                print(f"   Arbeit nach F_max: Mittelwert: {mean_after:.4f} µJ, Standardabweichung: {std_after:.4f} µJ")
+                
+                # Prozentualer Anteil der Arbeit bis F_max an der Gesamtarbeit
+                if mean_before + mean_after > 0:
+                    percent_before = (mean_before / (mean_before + mean_after)) * 100
+                    print(f"   Anteil der Arbeit bis F_max: {percent_before:.1f}%")
+            else:
+                print("⚠️ Keine gültigen Werte für die Arbeitssegmente berechnet!")
+        except Exception as e:
+            print(f"❌ Fehler bei der Berechnung der Arbeitssegmente: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        print("=" * 45)
+        
+        # Berechnung der flächennormierten Arbeitssegmente
+        print("\n=== Berechnung der flächennormierten Arbeitssegmente ===")
+        try:
+            analyzer.calculate_area_normalized_work_segments(max_allowed_length=config.max_embedding_length)
+            
+            # Ausgabe der Ergebnisse
+            if hasattr(analyzer, 'area_normalized_before_fmax') and analyzer.area_normalized_before_fmax and len(
+                    analyzer.area_normalized_before_fmax) > 0:
+                mean_before = analyzer.calculate_mean('area_normalized_before_fmax')
+                std_before = analyzer.calculate_stddev('area_normalized_before_fmax')
+                mean_after = analyzer.calculate_mean('area_normalized_after_fmax')
+                std_after = analyzer.calculate_stddev('area_normalized_after_fmax')
+                
+                print(
+                    f"✅ Flächennormierte Arbeitssegmente erfolgreich berechnet: {len(analyzer.area_normalized_before_fmax)} Werte")
+                print(
+                    f"   Arbeit bis F_max: Mittelwert: {mean_before:.4f} µJ/µm², Standardabweichung: {std_before:.4f} µJ/µm²")
+                print(
+                    f"   Arbeit nach F_max: Mittelwert: {mean_after:.4f} µJ/µm², Standardabweichung: {std_after:.4f} µJ/µm²")
+                
+                # Prozentualer Anteil der flächennormierten Arbeit bis F_max an der Gesamtarbeit
+                if mean_before + mean_after > 0:
+                    percent_before = (mean_before / (mean_before + mean_after)) * 100
+                    print(f"   Anteil der flächennormierten Arbeit bis F_max: {percent_before:.1f}%")
+            else:
+                print("⚠️ Keine gültigen Werte für die flächennormierten Arbeitssegmente berechnet!")
+        except Exception as e:
+            print(f"❌ Fehler bei der Berechnung der flächennormierten Arbeitssegmente: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        print("=" * 45)
+        
         # In der main.py, wo die anderen statistischen Ausgaben sind
         if config.calculate_work_intervals:
             print("\nKumulative normierte Arbeit:")
@@ -335,6 +395,11 @@ def main():
                         area_norm_path = exporter.save_area_normalized_work_to_excel()
                         if area_norm_path:
                             logger.info(f"Flächennormierte Arbeitsdaten gespeichert in: {area_norm_path}")
+                        
+                        # Neue Excel-Datei für Arbeitssegmente speichern
+                        work_segments_path = exporter.save_work_segments_to_excel()
+                        if work_segments_path:
+                            logger.info(f"Arbeitssegmente gespeichert in: {work_segments_path}")
                     
                     # Erstelle verschiedene Plots basierend auf Konfiguration
                     if full_analysis_config.create_standard_plots:
@@ -361,6 +426,21 @@ def main():
                     
                     # Erstelle die neuen Visualisierungen
                     DataPlotter.create_area_normalized_work_plot(analyzers_dict, area_norm_plots_folder)
+                    
+                    # Erstelle einen eigenen Ordner für die Arbeitssegmente
+                    work_segments_folder = plots_base_folder / "arbeitssegmente_plots"
+                    work_segments_folder.mkdir(exist_ok=True)
+                    
+                    # Erstelle Boxplots für Arbeitssegmente
+                    DataPlotter.create_work_segment_boxplots(analyzers_dict, work_segments_folder)
+                    # Erstelle Balkendiagramme für Vergleich der Arbeitssegmente
+                    DataPlotter.create_work_segment_comparison_plot(analyzers_dict, work_segments_folder)
+                    
+                    # Erstelle Boxplots für flächennormierte Arbeitssegmente
+                    DataPlotter.create_area_normalized_work_segment_boxplots(analyzers_dict, work_segments_folder)
+                    # Erstelle Balkendiagramme für Vergleich der flächennormierten Arbeitssegmente
+                    DataPlotter.create_area_normalized_work_segment_comparison_plot(analyzers_dict,
+                                                                                    work_segments_folder)
                     
                     if full_analysis_config.create_work_interval_plots:
                         work_intervals_folder = plots_base_folder / "arbeitsintervalle"

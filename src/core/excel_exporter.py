@@ -309,6 +309,195 @@ class ExcelExporter:
                 return file_path
         return None
     
+    def save_work_segments_to_excel(self, use_dialog: bool = False) -> Optional[Path]:
+        """
+        Speichert die Arbeitssegmente (vor und nach F_max) in einer separaten Excel-Datei.
+
+        Args:
+            use_dialog: Wenn True, wird immer ein Dialog angezeigt, unabhängig von output_folder
+
+        Returns:
+            Optional[Path]: Der Pfad zur gespeicherten Datei oder None, wenn der Benutzer abbricht
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"SFPO_Arbeitssegmente_{timestamp}.xlsx"
+        
+        file_path = self._get_file_path(default_filename, "Speicherort für Arbeitssegment-Datei wählen", use_dialog)
+        
+        if file_path:
+            # Sammle Daten für alle Messreihen
+            work_before_fmax_data = {}
+            work_after_fmax_data = {}
+            area_norm_before_fmax_data = {}
+            area_norm_after_fmax_data = {}
+            
+            # Erstelle Übersichts-Zusammenfassung
+            summary_data = []
+            
+            for name, analyzer in self.interval_data.items():
+                # Prüfe ob die benötigten Attribute vorhanden sind
+                has_work_segments = (hasattr(analyzer, 'work_before_fmax') and
+                                     hasattr(analyzer, 'work_after_fmax') and
+                                     analyzer.work_before_fmax and
+                                     analyzer.work_after_fmax)
+                
+                has_area_norm_segments = (hasattr(analyzer, 'area_normalized_before_fmax') and
+                                          hasattr(analyzer, 'area_normalized_after_fmax') and
+                                          analyzer.area_normalized_before_fmax and
+                                          analyzer.area_normalized_after_fmax)
+                
+                # Absolute Arbeitswerte
+                if has_work_segments:
+                    # Entferne NaN-Werte für die statistische Auswertung
+                    valid_before = [x for x in analyzer.work_before_fmax if not np.isnan(x)]
+                    valid_after = [x for x in analyzer.work_after_fmax if not np.isnan(x)]
+                    
+                    if valid_before and valid_after:
+                        work_before_fmax_data[name] = pd.Series(valid_before)
+                        work_after_fmax_data[name] = pd.Series(valid_after)
+                        
+                        # Füge Daten für Zusammenfassung hinzu
+                        summary_entry = {
+                            'Probenname': name,
+                            'Arbeit bis F_max [µJ]': np.mean(valid_before),
+                            'Std Arbeit bis F_max [µJ]': np.std(valid_before),
+                            'Arbeit nach F_max [µJ]': np.mean(valid_after),
+                            'Std Arbeit nach F_max [µJ]': np.std(valid_after),
+                            'Gesamtarbeit [µJ]': np.mean(valid_before) + np.mean(valid_after),
+                            'Std Gesamtarbeit [µJ]': np.sqrt(np.std(valid_before) ** 2 + np.std(valid_after) ** 2),
+                            'Anteil bis F_max [%]': (np.mean(valid_before) / (
+                                        np.mean(valid_before) + np.mean(valid_after))) * 100
+                            if (np.mean(valid_before) + np.mean(valid_after)) > 0 else 0
+                        }
+                        
+                        # Flächennormierte Arbeitswerte
+                        if has_area_norm_segments:
+                            # Entferne NaN-Werte für die statistische Auswertung
+                            valid_norm_before = [x for x in analyzer.area_normalized_before_fmax if not np.isnan(x)]
+                            valid_norm_after = [x for x in analyzer.area_normalized_after_fmax if not np.isnan(x)]
+                            
+                            if valid_norm_before and valid_norm_after:
+                                area_norm_before_fmax_data[name] = pd.Series(valid_norm_before)
+                                area_norm_after_fmax_data[name] = pd.Series(valid_norm_after)
+                                
+                                # Ergänze Zusammenfassung um flächennormierte Werte
+                                summary_entry.update({
+                                    'Fläch.norm. Arbeit bis F_max [µJ/µm²]': np.mean(valid_norm_before),
+                                    'Std fläch.norm. Arbeit bis F_max [µJ/µm²]': np.std(valid_norm_before),
+                                    'Fläch.norm. Arbeit nach F_max [µJ/µm²]': np.mean(valid_norm_after),
+                                    'Std fläch.norm. Arbeit nach F_max [µJ/µm²]': np.std(valid_norm_after),
+                                    'Fläch.norm. Gesamtarbeit [µJ/µm²]': np.mean(valid_norm_before) + np.mean(
+                                        valid_norm_after),
+                                    'Std fläch.norm. Gesamtarbeit [µJ/µm²]': np.sqrt(
+                                        np.std(valid_norm_before) ** 2 + np.std(valid_norm_after) ** 2),
+                                    'Fläch.norm. Anteil bis F_max [%]': (np.mean(valid_norm_before) /
+                                                                         (np.mean(valid_norm_before) + np.mean(
+                                                                             valid_norm_after))) * 100
+                                    if (np.mean(valid_norm_before) + np.mean(valid_norm_after)) > 0 else 0
+                                })
+                        
+                        summary_data.append(summary_entry)
+            
+            # Excel-Datei erstellen
+            with pd.ExcelWriter(file_path) as writer:
+                # 1. Zusammenfassungsblatt
+                if summary_data:
+                    summary_df = pd.DataFrame(summary_data)
+                    summary_df.to_excel(writer, sheet_name='Zusammenfassung', index=False)
+                
+                # 2. Rohwerte der absoluten Arbeit
+                if work_before_fmax_data and work_after_fmax_data:
+                    # Maximale Anzahl Zeilen bestimmen
+                    max_rows = max([len(series) for series in work_before_fmax_data.values()] +
+                                   [len(series) for series in work_after_fmax_data.values()])
+                    
+                    # DataFrame für Arbeit bis F_max
+                    df_before = pd.DataFrame({
+                        name: pd.Series(data.values, index=range(len(data)))
+                        for name, data in work_before_fmax_data.items()
+                    })
+                    df_before.index = [f"Messung {i + 1}" for i in range(max_rows)]
+                    df_before.to_excel(writer, sheet_name='Arbeit bis F_max')
+                    
+                    # DataFrame für Arbeit nach F_max
+                    df_after = pd.DataFrame({
+                        name: pd.Series(data.values, index=range(len(data)))
+                        for name, data in work_after_fmax_data.items()
+                    })
+                    df_after.index = [f"Messung {i + 1}" for i in range(max_rows)]
+                    df_after.to_excel(writer, sheet_name='Arbeit nach F_max')
+                    
+                    # Statistik für beide Arten von Arbeit
+                    stats_data = []
+                    for name in work_before_fmax_data.keys():
+                        before_data = work_before_fmax_data[name]
+                        after_data = work_after_fmax_data[name]
+                        total = before_data + after_data
+                        
+                        stats_data.append({
+                            'Probenname': name,
+                            'Mittelwert Arbeit bis F_max [µJ]': before_data.mean(),
+                            'Std Arbeit bis F_max [µJ]': before_data.std(),
+                            'Mittelwert Arbeit nach F_max [µJ]': after_data.mean(),
+                            'Std Arbeit nach F_max [µJ]': after_data.std(),
+                            'Mittelwert Gesamtarbeit [µJ]': total.mean(),
+                            'Std Gesamtarbeit [µJ]': total.std(),
+                            'Anteil Arbeit bis F_max [%]': (
+                                        before_data.mean() / total.mean() * 100) if total.mean() > 0 else 0
+                        })
+                    
+                    stats_df = pd.DataFrame(stats_data)
+                    stats_df.to_excel(writer, sheet_name='Statistik Arbeit', index=False)
+                
+                # 3. Rohwerte der flächennormierten Arbeit
+                if area_norm_before_fmax_data and area_norm_after_fmax_data:
+                    # Maximale Anzahl Zeilen bestimmen
+                    max_rows = max([len(series) for series in area_norm_before_fmax_data.values()] +
+                                   [len(series) for series in area_norm_after_fmax_data.values()])
+                    
+                    # DataFrame für flächennormierte Arbeit bis F_max
+                    df_norm_before = pd.DataFrame({
+                        name: pd.Series(data.values, index=range(len(data)))
+                        for name, data in area_norm_before_fmax_data.items()
+                    })
+                    df_norm_before.index = [f"Messung {i + 1}" for i in range(max_rows)]
+                    df_norm_before.to_excel(writer, sheet_name='Fläch.norm. bis F_max')
+                    
+                    # DataFrame für flächennormierte Arbeit nach F_max
+                    df_norm_after = pd.DataFrame({
+                        name: pd.Series(data.values, index=range(len(data)))
+                        for name, data in area_norm_after_fmax_data.items()
+                    })
+                    df_norm_after.index = [f"Messung {i + 1}" for i in range(max_rows)]
+                    df_norm_after.to_excel(writer, sheet_name='Fläch.norm. nach F_max')
+                    
+                    # Statistik für flächennormierte Arbeit
+                    norm_stats_data = []
+                    for name in area_norm_before_fmax_data.keys():
+                        before_data = area_norm_before_fmax_data[name]
+                        after_data = area_norm_after_fmax_data[name]
+                        total = before_data + after_data
+                        
+                        norm_stats_data.append({
+                            'Probenname': name,
+                            'Mittelwert fläch.norm. Arbeit bis F_max [µJ/µm²]': before_data.mean(),
+                            'Std fläch.norm. Arbeit bis F_max [µJ/µm²]': before_data.std(),
+                            'Mittelwert fläch.norm. Arbeit nach F_max [µJ/µm²]': after_data.mean(),
+                            'Std fläch.norm. Arbeit nach F_max [µJ/µm²]': after_data.std(),
+                            'Mittelwert fläch.norm. Gesamtarbeit [µJ/µm²]': total.mean(),
+                            'Std fläch.norm. Gesamtarbeit [µJ/µm²]': total.std(),
+                            'Anteil fläch.norm. Arbeit bis F_max [%]': (
+                                        before_data.mean() / total.mean() * 100) if total.mean() > 0 else 0
+                        })
+                    
+                    norm_stats_df = pd.DataFrame(norm_stats_data)
+                    norm_stats_df.to_excel(writer, sheet_name='Statistik Fläch.norm.', index=False)
+            
+            print(f"Arbeitssegment-Daten gespeichert in: {file_path}")
+            return file_path
+        
+        return None
+    
     def save_area_normalized_work_to_excel(self, use_dialog: bool = False) -> Optional[Path]:
         """
         Speichert die flächennormierten Arbeitsdaten in einer separaten Excel-Datei.

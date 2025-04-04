@@ -62,8 +62,10 @@ class MeasurementAnalyzer:
         self.force_moduli = []  # Liste für die Verbundmodule
         self.area_normalized_works = []  # Liste für flächen normalisierte Auszugsarbeit
         self.max_allowed_length = max_allowed_length  # Neue Variable für max. Einbetttiefe
+        self.logger = logging.getLogger('SFPO_Analyzer')  # Logger initialisieren
         self._update_mapping()
-
+        
+    # Aktualisierung der _update_mapping Methode, um die neuen Listen hinzuzufügen
     def _update_mapping(self):
         """ Private Methode zum Aktualisieren des data_mappings.
         Wird intern aufgerufen, wenn das Mapping aktuell sein muss.
@@ -74,11 +76,15 @@ class MeasurementAnalyzer:
             'diameters': self.fiberdiameters,
             'ifss': self.ifssvalues,
             'works': self.works,
+            'work_before_fmax': getattr(self, 'work_before_fmax', []),
+            'work_after_fmax': getattr(self, 'work_after_fmax', []),
             'work_intervals': self.work_intervals,
             'normed_intervals': self.normed_intervals,
             'mean_normed': self.mean_normed_intervals,
             'stddev_normed': self.stddev_normed_intervals,
-            'area_normalized_works': self.area_normalized_works,
+            'area_normalized_works': getattr(self, 'area_normalized_works', []),
+            'area_normalized_before_fmax': getattr(self, 'area_normalized_before_fmax', []),
+            'area_normalized_after_fmax': getattr(self, 'area_normalized_after_fmax', []),
             'rel_stddev_normed': self.rel_stddev_normed_intervals,
             'force_modulus': self.force_moduli
         }
@@ -585,6 +591,191 @@ class MeasurementAnalyzer:
         self._update_mapping()
         
         return self.area_normalized_works
+    
+    def calculate_work_before_fmax(self, measurement: list[tuple[float, float]],
+                                   max_force_index: int) -> float:
+        """
+        Berechnet die Arbeit bis zum Erreichen der maximalen Kraft (F_max).
+
+        Args:
+            measurement: Liste von (distance, force) Tupeln einer Messung
+            max_force_index: Index des F_max-Punktes in der Messung
+
+        Returns:
+            float: Berechnete Arbeit bis F_max in µJ (Mikro-Joule)
+        """
+        if max_force_index <= 0:
+            return 0.0
+        
+        # Extrahiere Weg- und Kraftwerte bis zum F_max-Punkt
+        distances = [point[0] for point in measurement[:max_force_index + 1]]
+        forces = [point[1] for point in measurement[:max_force_index + 1]]
+        
+        # Konvertiere zu NumPy Arrays für effiziente Berechnung
+        distance_array = np.array(distances)
+        force_array = np.array(forces)
+        
+        # Berechne das Integral (Arbeit) bis zum F_max-Punkt
+        work = np.trapezoid(force_array, distance_array)
+        return round(work, 3)
+    
+    def calculate_work_after_fmax(self, measurement: list[tuple[float, float]],
+                                  max_force_index: int, embedding_length: float,
+                                  max_allowed_length: float = None) -> float:
+        """
+        Berechnet die Arbeit nach Erreichen der maximalen Kraft (F_max) bis zum Ende.
+
+        Args:
+            measurement: Liste von (distance, force) Tupeln einer Messung
+            max_force_index: Index des F_max-Punktes in der Messung
+            embedding_length: Maximale Einbettlänge für diese Messung
+            max_allowed_length: Konfigurierbare maximale Einbetttiefe (Optional)
+
+        Returns:
+            float: Berechnete Arbeit nach F_max in µJ (Mikro-Joule)
+        """
+        if max_force_index >= len(measurement) - 1:
+            return 0.0
+        
+        # Wenn keine maximale Länge angegeben wurde, verwende die Klassenvariable
+        if max_allowed_length is None:
+            max_allowed_length = self.max_allowed_length
+        
+        # Begrenze embedding_length auf die konfigurierte maximale Länge
+        embedding_length = min(embedding_length, max_allowed_length)
+        
+        # Extrahiere Weg- und Kraftwerte nach dem F_max-Punkt
+        distances = [point[0] for point in measurement[max_force_index:]]
+        forces = [point[1] for point in measurement[max_force_index:]]
+        
+        # Konvertiere zu NumPy Arrays für effiziente Berechnung
+        distance_array = np.array(distances)
+        force_array = np.array(forces)
+        
+        # Beschränke die Daten auf den Bereich bis zur Einbettlänge
+        mask = distance_array <= embedding_length
+        limited_distances = distance_array[mask]
+        limited_forces = force_array[mask]
+        
+        # Berechne das Integral (Arbeit) nach dem F_max-Punkt
+        work = np.trapezoid(limited_forces, limited_distances)
+        return round(work, 3)
+    
+    def calculate_all_work_segments(self, max_allowed_length: float = None):
+        """
+        Berechnet die Arbeiten vor und nach F_max für alle Messungen.
+        Speichert die Ergebnisse in self.work_before_fmax und self.work_after_fmax.
+
+        Args:
+            max_allowed_length: Maximale Einbetttiefe (µm), wenn None wird self.max_allowed_length verwendet
+        """
+        # Verwende die übergebene maximale Länge oder die Klassenvariable
+        if max_allowed_length is None:
+            max_allowed_length = self.max_allowed_length
+        
+        # Initialisiere die Listen für die Arbeitswerte
+        self.work_before_fmax = []
+        self.work_after_fmax = []
+        
+        if len(self.measurements_data) != len(self.embeddinglengths):
+            self.logger.error("Ungleiche Anzahl von Messungen und Einbettlängen")
+            return
+        
+        # Für jede Messung die Arbeiten vor und nach F_max berechnen
+        for i, (measurement, embedding_length) in enumerate(zip(self.measurements_data, self.embeddinglengths)):
+            try:
+                # Finde maximale Kraft und deren Index
+                max_point = max(measurement, key=lambda point: point[1])
+                max_force_index = measurement.index(max_point)
+                
+                # Berechne Arbeit bis zu F_max
+                work_before = self.calculate_work_before_fmax(measurement, max_force_index)
+                self.work_before_fmax.append(work_before)
+                
+                # Berechne Arbeit nach F_max
+                work_after = self.calculate_work_after_fmax(measurement, max_force_index, embedding_length,
+                                                            max_allowed_length)
+                self.work_after_fmax.append(work_after)
+            
+            except Exception as e:
+                self.logger.error(f"Fehler bei der Arbeitsberechnung für Messung {i}: {e}")
+                self.work_before_fmax.append(0.0)
+                self.work_after_fmax.append(0.0)
+        
+        # Aktualisiere das Mapping für statistische Berechnungen
+        self._update_mapping()
+    
+    def calculate_area_normalized_work_segments(self, max_allowed_length: float = None):
+        """
+        Berechnet die flächennormierte Arbeit vor und nach F_max für jede Messung.
+
+        Args:
+            max_allowed_length: Maximale Einbetttiefe (µm), wenn None wird self.max_allowed_length verwendet
+        """
+        import math
+        
+        # Verwende die übergebene maximale Länge oder die Klassenvariable
+        if max_allowed_length is None:
+            max_allowed_length = self.max_allowed_length
+        
+        # Initialisiere die Listen
+        self.area_normalized_before_fmax = []
+        self.area_normalized_after_fmax = []
+        
+        # Überprüfen, ob alle benötigten Daten vorhanden sind
+        if not self.work_before_fmax or not self.work_after_fmax or not self.fiberdiameters or not self.embeddinglengths:
+            self.logger.warning("Fehlende Daten für flächennormierte Arbeitsberechnung")
+            return
+        
+        # Überprüfen, ob alle Listen die gleiche Länge haben
+        if (len(self.work_before_fmax) != len(self.fiberdiameters) or
+                len(self.work_after_fmax) != len(self.fiberdiameters) or
+                len(self.work_before_fmax) != len(self.embeddinglengths)):
+            self.logger.warning("Ungleiche Längen der Datenlisten")
+            self.logger.warning(
+                f"Arbeit vor F_max: {len(self.work_before_fmax)}, Arbeit nach F_max: {len(self.work_after_fmax)}, "
+                f"Durchmesser: {len(self.fiberdiameters)}, Einbettlängen: {len(self.embeddinglengths)}")
+            return
+        
+        # Berechnung der flächennormierten Arbeit für jede Messung
+        for work_before, work_after, diameter, length in zip(
+                self.work_before_fmax, self.work_after_fmax, self.fiberdiameters, self.embeddinglengths):
+            
+            # Begrenze die Einbettlänge auf die maximale Länge
+            length = min(length, max_allowed_length)
+            
+            # Berechnung der Mantelfläche: PI * d * l_e
+            if diameter <= 0 or length <= 0:
+                self.logger.warning(f"Ungültige Werte bei der Berechnung: d={diameter}, l_e={length}")
+                self.area_normalized_before_fmax.append(0.0)
+                self.area_normalized_after_fmax.append(0.0)
+                continue
+            
+            surface_area = math.pi * diameter * length
+            
+            # Berechnung der flächennormierten Arbeit
+            area_norm_work_before = work_before / surface_area
+            area_norm_work_after = work_after / surface_area
+            
+            # Runden auf 4 Dezimalstellen und Speichern
+            self.area_normalized_before_fmax.append(round(area_norm_work_before, 4))
+            self.area_normalized_after_fmax.append(round(area_norm_work_after, 4))
+        
+        self.logger.info(
+            f"\nFlächennormierte Arbeit vor/nach F_max berechnet: {len(self.area_normalized_before_fmax)} Werte")
+        if self.area_normalized_before_fmax:
+            mean_before = self.calculate_mean('area_normalized_before_fmax')
+            std_before = self.calculate_stddev('area_normalized_before_fmax')
+            mean_after = self.calculate_mean('area_normalized_after_fmax')
+            std_after = self.calculate_stddev('area_normalized_after_fmax')
+            
+            self.logger.info(f"Mittelwert vor F_max: {mean_before:.4f} µJ/µm²")
+            self.logger.info(f"Standardabweichung vor F_max: {std_before:.4f} µJ/µm²")
+            self.logger.info(f"Mittelwert nach F_max: {mean_after:.4f} µJ/µm²")
+            self.logger.info(f"Standardabweichung nach F_max: {std_after:.4f} µJ/µm²")
+        
+        # Mapping aktualisieren
+        self._update_mapping()
     
     def calculate_force_modulus(self) -> None:
         """

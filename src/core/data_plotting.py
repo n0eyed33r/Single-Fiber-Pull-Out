@@ -173,12 +173,29 @@ class DataPlotter:
         f_max_data = []
         work_data = []
         ifss_data = []
+        # Neue Arrays für Arbeitssegmente
+        work_before_fmax_data = []
+        work_after_fmax_data = []
+        # Neue Arrays für flächennormierte Arbeitssegmente
+        area_norm_before_fmax_data = []
+        area_norm_after_fmax_data = []
         labels = []
         
         for name, analyzer in analyzers_dict.items():
             f_max_data.append(analyzer.max_forces_data)
             work_data.append(analyzer.works)
             ifss_data.append(analyzer.ifssvalues)
+            
+            # Sammle Arbeitssegment-Daten, falls vorhanden
+            if hasattr(analyzer, 'work_before_fmax') and analyzer.work_before_fmax:
+                work_before_fmax_data.append(analyzer.work_before_fmax)
+                work_after_fmax_data.append(analyzer.work_after_fmax)
+            
+            # Sammle flächennormierte Arbeitssegment-Daten, falls vorhanden
+            if hasattr(analyzer, 'area_normalized_before_fmax') and analyzer.area_normalized_before_fmax:
+                area_norm_before_fmax_data.append(analyzer.area_normalized_before_fmax)
+                area_norm_after_fmax_data.append(analyzer.area_normalized_after_fmax)
+            
             # Ersetze Unterstriche durch Leerzeichen für die Beschriftung
             labels.append(name.replace('_', ' '))
         
@@ -278,6 +295,122 @@ class DataPlotter:
         plt.savefig(ifss_path, dpi=300, bbox_inches='tight')
         plt.close()
         
+        # 4. Optional: Erstelle Boxplots für Arbeitssegmente, wenn Daten vorhanden sind
+        if work_before_fmax_data and work_after_fmax_data:
+            # Boxplot für Arbeit bis F_max
+            plt.figure(figsize=(12, 8))
+            boxplot = plt.boxplot(work_before_fmax_data, patch_artist=True, labels=labels)
+            
+            # Formatierung des Boxplots (wie zuvor)
+            for box in boxplot['boxes']:
+                box.set(facecolor='#b3cde3', edgecolor='#2c7fb8', linewidth=2, alpha=0.7)
+            for whisker in boxplot['whiskers']:
+                whisker.set(color='#2c7fb8', linewidth=2)
+            for cap in boxplot['caps']:
+                cap.set(color='#2c7fb8', linewidth=2)
+            for median in boxplot['medians']:
+                median.set(color='red', linewidth=2)
+            for flier in boxplot['fliers']:
+                flier.set(marker='o', markerfacecolor='red', markersize=6, alpha=0.7)
+            
+            plt.title('Vergleich der Arbeit bis F_max', fontsize=24, fontweight='bold')
+            plt.ylabel('Arbeit bis F_max [µJ]', fontsize=24, fontweight='bold')
+            plt.xticks(rotation=30, ha='right', fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+            plt.tight_layout()
+            
+            # Speichere Plot
+            work_before_path = plots_folder / "boxplot_work_before_fmax_comparison.png"
+            plt.savefig(work_before_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # Boxplot für Arbeit nach F_max
+            plt.figure(figsize=(12, 8))
+            boxplot = plt.boxplot(work_after_fmax_data, patch_artist=True, labels=labels)
+            
+            # Formatierung des Boxplots (wie zuvor, aber in Grün)
+            for box in boxplot['boxes']:
+                box.set(facecolor='#b2e2e2', edgecolor='#238b8d', linewidth=2, alpha=0.7)
+            for whisker in boxplot['whiskers']:
+                whisker.set(color='#238b8d', linewidth=2)
+            for cap in boxplot['caps']:
+                cap.set(color='#238b8d', linewidth=2)
+            for median in boxplot['medians']:
+                median.set(color='red', linewidth=2)
+            for flier in boxplot['fliers']:
+                flier.set(marker='o', markerfacecolor='red', markersize=6, alpha=0.7)
+            
+            plt.title('Vergleich der Arbeit nach F_max', fontsize=24, fontweight='bold')
+            plt.ylabel('Arbeit nach F_max [µJ]', fontsize=24, fontweight='bold')
+            plt.xticks(rotation=30, ha='right', fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+            plt.tight_layout()
+            
+            # Speichere Plot
+            work_after_path = plots_folder / "boxplot_work_after_fmax_comparison.png"
+            plt.savefig(work_after_path, dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        # 5. Optional: Erstelle Boxplots für flächennormierte Arbeitssegmente, wenn Daten vorhanden sind
+        if area_norm_before_fmax_data and area_norm_after_fmax_data:
+            # Boxplot für flächennormierte Arbeit bis F_max
+            plt.figure(figsize=(12, 8))
+            boxplot = plt.boxplot(area_norm_before_fmax_data, patch_artist=True, labels=labels)
+            
+            # Formatierung des Boxplots
+            for box in boxplot['boxes']:
+                box.set(facecolor='#9ecae1', edgecolor='#3182bd', linewidth=2, alpha=0.7)
+            for whisker in boxplot['whiskers']:
+                whisker.set(color='#3182bd', linewidth=2)
+            for cap in boxplot['caps']:
+                cap.set(color='#3182bd', linewidth=2)
+            for median in boxplot['medians']:
+                median.set(color='red', linewidth=2)
+            for flier in boxplot['fliers']:
+                flier.set(marker='o', markerfacecolor='red', markersize=6, alpha=0.7)
+            
+            plt.title('Vergleich der flächennormierten Arbeit bis F_max', fontsize=24, fontweight='bold')
+            plt.ylabel('Flächennormierte Arbeit bis F_max [µJ/µm²]', fontsize=22, fontweight='bold')
+            plt.xticks(rotation=30, ha='right', fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+            plt.tight_layout()
+            
+            # Speichere Plot
+            area_norm_before_path = plots_folder / "boxplot_area_norm_before_fmax_comparison.png"
+            plt.savefig(area_norm_before_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # Boxplot für flächennormierte Arbeit nach F_max
+            plt.figure(figsize=(12, 8))
+            boxplot = plt.boxplot(area_norm_after_fmax_data, patch_artist=True, labels=labels)
+            
+            # Formatierung des Boxplots
+            for box in boxplot['boxes']:
+                box.set(facecolor='#a1d99b', edgecolor='#31a354', linewidth=2, alpha=0.7)
+            for whisker in boxplot['whiskers']:
+                whisker.set(color='#31a354', linewidth=2)
+            for cap in boxplot['caps']:
+                cap.set(color='#31a354', linewidth=2)
+            for median in boxplot['medians']:
+                median.set(color='red', linewidth=2)
+            for flier in boxplot['fliers']:
+                flier.set(marker='o', markerfacecolor='red', markersize=6, alpha=0.7)
+            
+            plt.title('Vergleich der flächennormierten Arbeit nach F_max', fontsize=24, fontweight='bold')
+            plt.ylabel('Flächennormierte Arbeit nach F_max [µJ/µm²]', fontsize=22, fontweight='bold')
+            plt.xticks(rotation=30, ha='right', fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+            plt.tight_layout()
+            
+            # Speichere Plot
+            area_norm_after_path = plots_folder / "boxplot_area_norm_after_fmax_comparison.png"
+            plt.savefig(area_norm_after_path, dpi=300, bbox_inches='tight')
+            plt.close()
+        
         # Erstelle auch noch die einzelnen Boxplots pro Messreihe (falls trotzdem benötigt)
         for i, (name, analyzer) in enumerate(analyzers_dict.items()):
             # F_max Boxplot für diese Messreihe
@@ -323,6 +456,300 @@ class DataPlotter:
             # Speichere IFSS-Plot
             ifss_path = plots_folder / f"boxplot_ifss_{name}.png"
             plt.savefig(ifss_path, bbox_inches='tight')
+            plt.close()
+            
+            # Optional: Boxplots für Arbeitssegmente
+            if hasattr(analyzer, 'work_before_fmax') and analyzer.work_before_fmax:
+                plt.figure(figsize=(10, 7))
+                plt.boxplot([analyzer.work_before_fmax], labels=[name])
+                plt.title(f'Arbeit bis F_max - {name}', fontsize=24, fontweight='bold')
+                plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
+                plt.xlabel('Probe', fontsize=24, fontweight='bold')
+                plt.xticks(fontsize=22, fontweight='bold')
+                plt.yticks(fontsize=22, fontweight='bold')
+                plt.grid(True)
+                
+                # Speichere Plot
+                single_path = plots_folder / f"boxplot_work_before_fmax_{name}.png"
+                plt.savefig(single_path, bbox_inches='tight')
+                plt.close()
+                
+                plt.figure(figsize=(10, 7))
+                plt.boxplot([analyzer.work_after_fmax], labels=[name])
+                plt.title(f'Arbeit nach F_max - {name}', fontsize=24, fontweight='bold')
+                plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
+                plt.xlabel('Probe', fontsize=24, fontweight='bold')
+                plt.xticks(fontsize=22, fontweight='bold')
+                plt.yticks(fontsize=22, fontweight='bold')
+                plt.grid(True)
+                
+                # Speichere Plot
+                single_path = plots_folder / f"boxplot_work_after_fmax_{name}.png"
+                plt.savefig(single_path, bbox_inches='tight')
+                plt.close()
+    
+    @staticmethod
+    def create_work_segment_comparison_plot(analyzers_dict: dict, plots_folder: Path):
+        """
+        Erstellt ein Balkendiagramm zum Vergleich der Arbeit vor und nach F_max für alle Messreihen.
+
+        Args:
+            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+            plots_folder: Ordner zum Speichern der Plots
+        """
+        # Stelle sicher, dass der Ausgabeordner existiert
+        plots_folder.mkdir(exist_ok=True, parents=True)
+        
+        # Sammle Daten für alle Messreihen
+        labels = []
+        mean_before_values = []
+        std_before_values = []
+        mean_after_values = []
+        std_after_values = []
+        
+        # Extrahiere Daten aus den Analyzern
+        for name, analyzer in analyzers_dict.items():
+            if hasattr(analyzer, 'work_before_fmax') and analyzer.work_before_fmax and \
+                    hasattr(analyzer, 'work_after_fmax') and analyzer.work_after_fmax:
+                # Entferne NaN-Werte für die statistische Auswertung
+                valid_before = [x for x in analyzer.work_before_fmax if not np.isnan(x)]
+                valid_after = [x for x in analyzer.work_after_fmax if not np.isnan(x)]
+                
+                if valid_before and valid_after:
+                    labels.append(name.replace('_', ' '))
+                    mean_before_values.append(np.mean(valid_before))
+                    std_before_values.append(np.std(valid_before))
+                    mean_after_values.append(np.mean(valid_after))
+                    std_after_values.append(np.std(valid_after))
+        
+        if not labels:
+            print("Keine gültigen Arbeitssegment-Daten zum Plotten vorhanden")
+            return
+        
+        # Erstelle Balkendiagramm
+        plt.figure(figsize=(14, 8))
+        
+        # Position für die Balken
+        x_pos = np.arange(len(labels))
+        bar_width = 0.35
+        
+        # Erste Balkengruppe (Arbeit bis F_max)
+        bars1 = plt.bar(x_pos - bar_width / 2, mean_before_values, bar_width,
+                        yerr=std_before_values,
+                        color='#6baed6',  # Blau
+                        edgecolor='black',
+                        linewidth=1.0,
+                        capsize=8,
+                        label='Arbeit bis F_max',
+                        error_kw={'elinewidth': 1.5, 'capthick': 1.5, 'ecolor': 'black'})
+        
+        # Zweite Balkengruppe (Arbeit nach F_max)
+        bars2 = plt.bar(x_pos + bar_width / 2, mean_after_values, bar_width,
+                        yerr=std_after_values,
+                        color='#74c476',  # Grün
+                        edgecolor='black',
+                        linewidth=1.0,
+                        capsize=8,
+                        label='Arbeit nach F_max',
+                        error_kw={'elinewidth': 1.5, 'capthick': 1.5, 'ecolor': 'black'})
+        
+        # Beschriftungen und Formatierung
+        plt.title('Vergleich der Arbeit vor und nach F_max', fontsize=24, fontweight='bold')
+        plt.ylabel('Arbeit [µJ]', fontsize=22, fontweight='bold')
+        plt.xticks(x_pos, labels, rotation=30, ha='right', fontsize=16, fontweight='bold')
+        plt.yticks(fontsize=16, fontweight='bold')
+        
+        # Gitter für bessere Lesbarkeit
+        plt.grid(True, axis='y', linestyle='--', alpha=0.5)
+        
+        # Legende hinzufügen
+        plt.legend(fontsize=18)
+        
+        # Entferne obere und rechte Achsenlinien für einen klareren Look
+        plt.gca().spines['right'].set_visible(False)
+        plt.gca().spines['top'].set_visible(False)
+        
+        # Optimiere Layout
+        plt.tight_layout()
+        
+        # Speichere Plot
+        plot_path = plots_folder / "work_segment_comparison.png"
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Berechne prozentualen Anteil der Arbeit bis F_max
+        if mean_before_values and mean_after_values:
+            total_work = [before + after for before, after in zip(mean_before_values, mean_after_values)]
+            percent_before = [100 * before / total if total > 0 else 0
+                              for before, total in zip(mean_before_values, total_work)]
+            
+            # Erstelle Balkendiagramm für prozentualen Anteil
+            plt.figure(figsize=(14, 8))
+            
+            # Balkendiagramm für prozentualen Anteil
+            bars = plt.bar(x_pos, percent_before,
+                           width=0.6,
+                           color='#6baed6',  # Blau
+                           edgecolor='black',
+                           linewidth=1.5,
+                           alpha=0.8)
+            
+            # Beschriftungen und Formatierung
+            plt.title('Prozentualer Anteil der Arbeit bis F_max an der Gesamtarbeit',
+                      fontsize=24, fontweight='bold')
+            plt.ylabel('Anteil [%]', fontsize=22, fontweight='bold')
+            plt.xticks(x_pos, labels, rotation=30, ha='right', fontsize=16, fontweight='bold')
+            plt.yticks(fontsize=16, fontweight='bold')
+            plt.ylim(0, 100)  # Von 0 bis 100%
+            
+            # Gitter für bessere Lesbarkeit
+            plt.grid(True, axis='y', linestyle='--', alpha=0.5)
+            
+            # Füge Datenwerte über den Balken hinzu
+            for i, (bar, percent) in enumerate(zip(bars, percent_before)):
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width() / 2., height + 1,
+                         f'{percent:.1f}%',
+                         ha='center', va='bottom', fontsize=12, rotation=0)
+            
+            # Optimiere Layout
+            plt.tight_layout()
+            
+            # Speichere Plot
+            plot_path = plots_folder / "work_segment_percentage.png"
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close()
+    
+    @staticmethod
+    def create_area_normalized_work_segment_comparison_plot(analyzers_dict: dict, plots_folder: Path):
+        """
+        Erstellt ein Balkendiagramm zum Vergleich der flächennormierten Arbeit vor und nach F_max für alle Messreihen.
+
+        Args:
+            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+            plots_folder: Ordner zum Speichern der Plots
+        """
+        # Stelle sicher, dass der Ausgabeordner existiert
+        plots_folder.mkdir(exist_ok=True, parents=True)
+        
+        # Sammle Daten für alle Messreihen
+        labels = []
+        mean_before_values = []
+        std_before_values = []
+        mean_after_values = []
+        std_after_values = []
+        
+        # Extrahiere Daten aus den Analyzern
+        for name, analyzer in analyzers_dict.items():
+            if hasattr(analyzer, 'area_normalized_before_fmax') and analyzer.area_normalized_before_fmax and \
+                    hasattr(analyzer, 'area_normalized_after_fmax') and analyzer.area_normalized_after_fmax:
+                # Entferne NaN-Werte für die statistische Auswertung
+                valid_before = [x for x in analyzer.area_normalized_before_fmax if not np.isnan(x)]
+                valid_after = [x for x in analyzer.area_normalized_after_fmax if not np.isnan(x)]
+                
+                if valid_before and valid_after:
+                    labels.append(name.replace('_', ' '))
+                    mean_before_values.append(np.mean(valid_before))
+                    std_before_values.append(np.std(valid_before))
+                    mean_after_values.append(np.mean(valid_after))
+                    std_after_values.append(np.std(valid_after))
+        
+        if not labels:
+            print("Keine gültigen flächennormierten Arbeitssegment-Daten zum Plotten vorhanden")
+            return
+        
+        # Erstelle Balkendiagramm
+        plt.figure(figsize=(14, 8))
+        
+        # Position für die Balken
+        x_pos = np.arange(len(labels))
+        bar_width = 0.35
+        
+        # Erste Balkengruppe (Flächennormierte Arbeit bis F_max)
+        bars1 = plt.bar(x_pos - bar_width / 2, mean_before_values, bar_width,
+                        yerr=std_before_values,
+                        color='#9ecae1',  # Hellblau
+                        edgecolor='black',
+                        linewidth=1.0,
+                        capsize=8,
+                        label='Flächennormierte Arbeit bis F_max',
+                        error_kw={'elinewidth': 1.5, 'capthick': 1.5, 'ecolor': 'black'})
+        
+        # Zweite Balkengruppe (Flächennormierte Arbeit nach F_max)
+        bars2 = plt.bar(x_pos + bar_width / 2, mean_after_values, bar_width,
+                        yerr=std_after_values,
+                        color='#a1d99b',  # Hellgrün
+                        edgecolor='black',
+                        linewidth=1.0,
+                        capsize=8,
+                        label='Flächennormierte Arbeit nach F_max',
+                        error_kw={'elinewidth': 1.5, 'capthick': 1.5, 'ecolor': 'black'})
+        
+        # Beschriftungen und Formatierung
+        plt.title('Vergleich der flächennormierten Arbeit vor und nach F_max', fontsize=22, fontweight='bold')
+        plt.ylabel('Flächennormierte Arbeit [µJ/µm²]', fontsize=22, fontweight='bold')
+        plt.xticks(x_pos, labels, rotation=30, ha='right', fontsize=16, fontweight='bold')
+        plt.yticks(fontsize=16, fontweight='bold')
+        
+        # Gitter für bessere Lesbarkeit
+        plt.grid(True, axis='y', linestyle='--', alpha=0.5)
+        
+        # Legende hinzufügen
+        plt.legend(fontsize=16)
+        
+        # Entferne obere und rechte Achsenlinien für einen klareren Look
+        plt.gca().spines['right'].set_visible(False)
+        plt.gca().spines['top'].set_visible(False)
+        
+        # Optimiere Layout
+        plt.tight_layout()
+        
+        # Speichere Plot
+        plot_path = plots_folder / "area_norm_work_segment_comparison.png"
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Berechne prozentualen Anteil der flächennormierten Arbeit bis F_max
+        if mean_before_values and mean_after_values:
+            total_work = [before + after for before, after in zip(mean_before_values, mean_after_values)]
+            percent_before = [100 * before / total if total > 0 else 0
+                              for before, total in zip(mean_before_values, total_work)]
+            
+            # Erstelle Balkendiagramm für prozentualen Anteil
+            plt.figure(figsize=(14, 8))
+            
+            # Balkendiagramm für prozentualen Anteil
+            bars = plt.bar(x_pos, percent_before,
+                           width=0.6,
+                           color='#9ecae1',  # Hellblau
+                           edgecolor='black',
+                           linewidth=1.5,
+                           alpha=0.8)
+            
+            # Beschriftungen und Formatierung
+            plt.title('Prozentualer Anteil der flächennormierten Arbeit bis F_max an der Gesamtarbeit',
+                      fontsize=20, fontweight='bold')
+            plt.ylabel('Anteil [%]', fontsize=22, fontweight='bold')
+            plt.xticks(x_pos, labels, rotation=30, ha='right', fontsize=16, fontweight='bold')
+            plt.yticks(fontsize=16, fontweight='bold')
+            plt.ylim(0, 100)  # Von 0 bis 100%
+            
+            # Gitter für bessere Lesbarkeit
+            plt.grid(True, axis='y', linestyle='--', alpha=0.5)
+            
+            # Füge Datenwerte über den Balken hinzu
+            for i, (bar, percent) in enumerate(zip(bars, percent_before)):
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width() / 2., height + 1,
+                         f'{percent:.1f}%',
+                         ha='center', va='bottom', fontsize=12, rotation=0)
+            
+            # Optimiere Layout
+            plt.tight_layout()
+            
+            # Speichere Plot
+            plot_path = plots_folder / "area_norm_work_segment_percentage.png"
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
             plt.close()
     
     @staticmethod
@@ -578,6 +1005,52 @@ class DataPlotter:
             plt.grid(True)
             plt.savefig(plots_folder / f"violin_fmax_{name}.png", bbox_inches='tight')
             plt.close()
+            
+            # Arbeit Violin Plot
+            if hasattr(analyzer, 'works') and analyzer.works:
+                plt.figure(figsize=(10, 6))
+                violin_parts = plt.violinplot(analyzer.works, showmeans=False, showmedians=True)
+                
+                plt.title(f'Verrichtete Arbeit - {name}', fontsize=24, fontweight='bold')
+                plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
+                plt.xlabel('Probe', fontsize=24, fontweight='bold')
+                plt.xticks([1], [name], fontsize=22, fontweight='bold')
+                plt.yticks(fontsize=22, fontweight='bold')
+                
+                plt.grid(True)
+                plt.savefig(plots_folder / f"violin_work_{name}.png", bbox_inches='tight')
+                plt.close()
+            
+            # IFSS Violin Plot
+            if hasattr(analyzer, 'ifssvalues') and analyzer.ifssvalues:
+                plt.figure(figsize=(10, 6))
+                violin_parts = plt.violinplot(analyzer.ifssvalues, showmeans=False, showmedians=True)
+                
+                plt.title(f'Grenzflächenscherfestigkeit - {name}', fontsize=24, fontweight='bold')
+                plt.ylabel('IFSS [MPa]', fontsize=24, fontweight='bold')
+                plt.xlabel('Probe', fontsize=24, fontweight='bold')
+                plt.xticks([1], [name], fontsize=22, fontweight='bold')
+                plt.yticks(fontsize=22, fontweight='bold')
+                
+                plt.grid(True)
+                plt.savefig(plots_folder / f"violin_ifss_{name}.png", bbox_inches='tight')
+                plt.close()
+            
+            # Optional: Violin Plots für Arbeit vor/nach F_max
+            if hasattr(analyzer, 'work_before_fmax') and analyzer.work_before_fmax:
+                plt.figure(figsize=(10, 6))
+                violin_parts = plt.violinplot([analyzer.work_before_fmax, analyzer.work_after_fmax],
+                                              showmeans=False, showmedians=True)
+                
+                plt.title(f'Arbeitssegmente - {name}', fontsize=24, fontweight='bold')
+                plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
+                plt.xlabel('Segment', fontsize=24, fontweight='bold')
+                plt.xticks([1, 2], ['Bis F_max', 'Nach F_max'], fontsize=22, fontweight='bold')
+                plt.yticks(fontsize=22, fontweight='bold')
+                
+                plt.grid(True)
+                plt.savefig(plots_folder / f"violin_work_segments_{name}.png", bbox_inches='tight')
+                plt.close()
     
     @staticmethod
     def plot_z_scores(name: str, data_dict: dict, save_path: Path) -> None:
@@ -890,3 +1363,270 @@ class DataPlotter:
         plot_path = plots_folder / "area_normalized_work_relative_comparison.png"
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.close()
+    
+    # Neue Methoden für die Darstellung der Arbeit vor und nach F_max
+    @staticmethod
+    def create_work_segment_boxplots(analyzers_dict: dict, plots_folder: Path):
+        """
+        Erstellt Boxplots für die Arbeitssegmente vor und nach F_max für alle Messreihen.
+
+        Args:
+            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+            plots_folder: Ordner zum Speichern der Plots
+        """
+        # Stelle sicher, dass der Ausgabeordner existiert
+        plots_folder.mkdir(exist_ok=True, parents=True)
+        
+        # Sammle Daten von allen Messreihen
+        work_before_fmax_data = []
+        work_after_fmax_data = []
+        labels = []
+        
+        for name, analyzer in analyzers_dict.items():
+            # Prüfe, ob die Arbeitssegmente berechnet wurden
+            if not hasattr(analyzer, 'work_before_fmax') or not analyzer.work_before_fmax or \
+                    not hasattr(analyzer, 'work_after_fmax') or not analyzer.work_after_fmax:
+                print(f"Warnung: Keine Arbeitssegment-Daten für {name}")
+                continue
+            
+            work_before_fmax_data.append(analyzer.work_before_fmax)
+            work_after_fmax_data.append(analyzer.work_after_fmax)
+            # Ersetze Unterstriche durch Leerzeichen für die Beschriftung
+            labels.append(name.replace('_', ' '))
+        
+        if not work_before_fmax_data or not work_after_fmax_data:
+            print("Keine Arbeitssegment-Daten zum Plotten vorhanden")
+            return
+        
+        # 1. Erstelle Boxplot für Arbeit bis F_max
+        plt.figure(figsize=(12, 8))
+        boxplot = plt.boxplot(work_before_fmax_data, patch_artist=True, labels=labels)
+        
+        # Formatierung des Boxplots
+        for box in boxplot['boxes']:
+            box.set(facecolor='lightblue', edgecolor='blue', linewidth=2, alpha=0.7)
+        for whisker in boxplot['whiskers']:
+            whisker.set(color='blue', linewidth=2)
+        for cap in boxplot['caps']:
+            cap.set(color='blue', linewidth=2)
+        for median in boxplot['medians']:
+            median.set(color='red', linewidth=2)
+        for flier in boxplot['fliers']:
+            flier.set(marker='o', markerfacecolor='red', markersize=6, alpha=0.7)
+        
+        # Beschriftungen und Formatierung
+        plt.title('Vergleich der Arbeit bis F_max', fontsize=24, fontweight='bold')
+        plt.ylabel('Arbeit bis F_max [µJ]', fontsize=24, fontweight='bold')
+        
+        # X-Achsenbeschriftungen drehen
+        plt.xticks(rotation=30, ha='right', fontsize=22, fontweight='bold')
+        plt.yticks(fontsize=22, fontweight='bold')
+        
+        plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        
+        # Speichere Arbeit bis F_max Plot
+        work_before_path = plots_folder / "boxplot_work_before_fmax_comparison.png"
+        plt.savefig(work_before_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 2. Erstelle Boxplot für Arbeit nach F_max
+        plt.figure(figsize=(12, 8))
+        boxplot = plt.boxplot(work_after_fmax_data, patch_artist=True, labels=labels)
+        
+        # Formatierung des Boxplots
+        for box in boxplot['boxes']:
+            box.set(facecolor='lightgreen', edgecolor='green', linewidth=2, alpha=0.7)
+        for whisker in boxplot['whiskers']:
+            whisker.set(color='green', linewidth=2)
+        for cap in boxplot['caps']:
+            cap.set(color='green', linewidth=2)
+        for median in boxplot['medians']:
+            median.set(color='red', linewidth=2)
+        for flier in boxplot['fliers']:
+            flier.set(marker='o', markerfacecolor='red', markersize=6, alpha=0.7)
+        
+        # Beschriftungen und Formatierung
+        plt.title('Vergleich der Arbeit nach F_max', fontsize=24, fontweight='bold')
+        plt.ylabel('Arbeit nach F_max [µJ]', fontsize=24, fontweight='bold')
+        
+        # X-Achsenbeschriftungen drehen
+        plt.xticks(rotation=30, ha='right', fontsize=22, fontweight='bold')
+        plt.yticks(fontsize=22, fontweight='bold')
+        
+        plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        
+        # Speichere Arbeit nach F_max Plot
+        work_after_path = plots_folder / "boxplot_work_after_fmax_comparison.png"
+        plt.savefig(work_after_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Erstelle auch einzelne Boxplots pro Messreihe
+        for name, analyzer in analyzers_dict.items():
+            if not hasattr(analyzer, 'work_before_fmax') or not analyzer.work_before_fmax or \
+                    not hasattr(analyzer, 'work_after_fmax') or not analyzer.work_after_fmax:
+                continue
+            
+            # Arbeit bis F_max Boxplot für diese Messreihe
+            plt.figure(figsize=(10, 7))
+            plt.boxplot([analyzer.work_before_fmax], labels=[name])
+            plt.title(f'Arbeit bis F_max - {name}', fontsize=24, fontweight='bold')
+            plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
+            plt.xlabel('Probe', fontsize=24, fontweight='bold')
+            plt.xticks(fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True)
+            
+            # Speichere einzelnen Plot
+            single_path = plots_folder / f"boxplot_work_before_fmax_{name}.png"
+            plt.savefig(single_path, bbox_inches='tight')
+            plt.close()
+            
+            # Arbeit nach F_max Boxplot für diese Messreihe
+            plt.figure(figsize=(10, 7))
+            plt.boxplot([analyzer.work_after_fmax], labels=[name])
+            plt.title(f'Arbeit nach F_max - {name}', fontsize=24, fontweight='bold')
+            plt.ylabel('Arbeit [µJ]', fontsize=24, fontweight='bold')
+            plt.xlabel('Probe', fontsize=24, fontweight='bold')
+            plt.xticks(fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True)
+            
+            # Speichere einzelnen Plot
+            single_path = plots_folder / f"boxplot_work_after_fmax_{name}.png"
+            plt.savefig(single_path, bbox_inches='tight')
+            plt.close()
+    
+    @staticmethod
+    def create_area_normalized_work_segment_boxplots(analyzers_dict: dict, plots_folder: Path):
+        """
+        Erstellt Boxplots für die flächennormierten Arbeitssegmente vor und nach F_max für alle Messreihen.
+
+        Args:
+            analyzers_dict: Dictionary mit Namen und Analyzern der Messreihen
+            plots_folder: Ordner zum Speichern der Plots
+        """
+        # Stelle sicher, dass der Ausgabeordner existiert
+        plots_folder.mkdir(exist_ok=True, parents=True)
+        
+        # Sammle Daten von allen Messreihen
+        area_norm_before_fmax_data = []
+        area_norm_after_fmax_data = []
+        labels = []
+        
+        for name, analyzer in analyzers_dict.items():
+            # Prüfe, ob die flächennormierten Arbeitssegmente berechnet wurden
+            if not hasattr(analyzer, 'area_normalized_before_fmax') or not analyzer.area_normalized_before_fmax or \
+                    not hasattr(analyzer, 'area_normalized_after_fmax') or not analyzer.area_normalized_after_fmax:
+                print(f"Warnung: Keine flächennormierten Arbeitssegment-Daten für {name}")
+                continue
+            
+            area_norm_before_fmax_data.append(analyzer.area_normalized_before_fmax)
+            area_norm_after_fmax_data.append(analyzer.area_normalized_after_fmax)
+            # Ersetze Unterstriche durch Leerzeichen für die Beschriftung
+            labels.append(name.replace('_', ' '))
+        
+        if not area_norm_before_fmax_data or not area_norm_after_fmax_data:
+            print("Keine flächennormierten Arbeitssegment-Daten zum Plotten vorhanden")
+            return
+        
+        # 1. Erstelle Boxplot für flächennormierte Arbeit bis F_max
+        plt.figure(figsize=(12, 8))
+        boxplot = plt.boxplot(area_norm_before_fmax_data, patch_artist=True, labels=labels)
+        
+        # Formatierung des Boxplots
+        for box in boxplot['boxes']:
+            box.set(facecolor='lightcyan', edgecolor='teal', linewidth=2, alpha=0.7)
+        for whisker in boxplot['whiskers']:
+            whisker.set(color='teal', linewidth=2)
+        for cap in boxplot['caps']:
+            cap.set(color='teal', linewidth=2)
+        for median in boxplot['medians']:
+            median.set(color='red', linewidth=2)
+        for flier in boxplot['fliers']:
+            flier.set(marker='o', markerfacecolor='red', markersize=6, alpha=0.7)
+        
+        # Beschriftungen und Formatierung
+        plt.title('Vergleich der flächennormierten Arbeit bis F_max', fontsize=24, fontweight='bold')
+        plt.ylabel('Flächennormierte Arbeit bis F_max [µJ/µm²]', fontsize=22, fontweight='bold')
+        
+        # X-Achsenbeschriftungen drehen
+        plt.xticks(rotation=30, ha='right', fontsize=22, fontweight='bold')
+        plt.yticks(fontsize=22, fontweight='bold')
+        
+        plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        
+        # Speichere Plot für flächennormierte Arbeit bis F_max
+        area_norm_before_path = plots_folder / "boxplot_area_norm_before_fmax_comparison.png"
+        plt.savefig(area_norm_before_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 2. Erstelle Boxplot für flächennormierte Arbeit nach F_max
+        plt.figure(figsize=(12, 8))
+        boxplot = plt.boxplot(area_norm_after_fmax_data, patch_artist=True, labels=labels)
+        
+        # Formatierung des Boxplots
+        for box in boxplot['boxes']:
+            box.set(facecolor='#c4ecb0', edgecolor='#5ca147', linewidth=2, alpha=0.7)  # Hellgrün
+        for whisker in boxplot['whiskers']:
+            whisker.set(color='#5ca147', linewidth=2)
+        for cap in boxplot['caps']:
+            cap.set(color='#5ca147', linewidth=2)
+        for median in boxplot['medians']:
+            median.set(color='red', linewidth=2)
+        for flier in boxplot['fliers']:
+            flier.set(marker='o', markerfacecolor='red', markersize=6, alpha=0.7)
+        
+        # Beschriftungen und Formatierung
+        plt.title('Vergleich der flächennormierten Arbeit nach F_max', fontsize=24, fontweight='bold')
+        plt.ylabel('Flächennormierte Arbeit nach F_max [µJ/µm²]', fontsize=22, fontweight='bold')
+        
+        # X-Achsenbeschriftungen drehen
+        plt.xticks(rotation=30, ha='right', fontsize=22, fontweight='bold')
+        plt.yticks(fontsize=22, fontweight='bold')
+        
+        plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        
+        # Speichere Plot für flächennormierte Arbeit nach F_max
+        area_norm_after_path = plots_folder / "boxplot_area_norm_after_fmax_comparison.png"
+        plt.savefig(area_norm_after_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Erstelle auch einzelne Boxplots pro Messreihe
+        for name, analyzer in analyzers_dict.items():
+            if not hasattr(analyzer, 'area_normalized_before_fmax') or not analyzer.area_normalized_before_fmax or \
+                    not hasattr(analyzer, 'area_normalized_after_fmax') or not analyzer.area_normalized_after_fmax:
+                continue
+            
+            # Flächennormierte Arbeit bis F_max Boxplot für diese Messreihe
+            plt.figure(figsize=(10, 7))
+            plt.boxplot([analyzer.area_normalized_before_fmax], labels=[name])
+            plt.title(f'Flächennormierte Arbeit bis F_max - {name}', fontsize=22, fontweight='bold')
+            plt.ylabel('Flächennormierte Arbeit [µJ/µm²]', fontsize=22, fontweight='bold')
+            plt.xlabel('Probe', fontsize=22, fontweight='bold')
+            plt.xticks(fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True)
+            
+            # Speichere einzelnen Plot
+            single_path = plots_folder / f"boxplot_area_norm_before_fmax_{name}.png"
+            plt.savefig(single_path, bbox_inches='tight')
+            plt.close()
+            
+            # Flächennormierte Arbeit nach F_max Boxplot für diese Messreihe
+            plt.figure(figsize=(10, 7))
+            plt.boxplot([analyzer.area_normalized_after_fmax], labels=[name])
+            plt.title(f'Flächennormierte Arbeit nach F_max - {name}', fontsize=22, fontweight='bold')
+            plt.ylabel('Flächennormierte Arbeit [µJ/µm²]', fontsize=22, fontweight='bold')
+            plt.xlabel('Probe', fontsize=22, fontweight='bold')
+            plt.xticks(fontsize=22, fontweight='bold')
+            plt.yticks(fontsize=22, fontweight='bold')
+            plt.grid(True)
+            
+            # Speichere einzelnen Plot
+            single_path = plots_folder / f"boxplot_area_norm_after_fmax_{name}.png"
+            plt.savefig(single_path, bbox_inches='tight')
+            plt.close()
